@@ -1,0 +1,74 @@
+name: Gerar executável (.exe)
+
+# Roda sozinho a cada envio de código e também manualmente
+# (aba Actions > "Gerar executável (.exe)" > Run workflow).
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Rodar os testes do banco de dados
+        run: python -m unittest test_database -v
+
+      - name: Gerar o executável com PyInstaller
+        run: |
+          $opcoes = @(
+            "--noconfirm", "--clean", "--onefile", "--windowed",
+            "--name", "AnotacoesHospitalares",
+            "--collect-all", "customtkinter",
+            "--hidden-import", "PIL._tkinter_finder"
+          )
+          if (Test-Path "icone.ico") { $opcoes += @("--icon", "icone.ico", "--add-data", "icone.ico;.") }
+          if (Test-Path "logo.png")  { $opcoes += @("--add-data", "logo.png;.") }
+          python -m PyInstaller @opcoes main.py
+          if (-not (Test-Path "dist\AnotacoesHospitalares.exe")) { throw "O .exe não foi gerado." }
+
+      # Abre o programa por alguns segundos para ver se ele fecha sozinho
+      # (sintoma de arquivos faltando no pacote). Não bloqueia a entrega.
+      - name: Testar se o executável abre
+        continue-on-error: true
+        run: |
+          $p = Start-Process -FilePath "dist\AnotacoesHospitalares.exe" -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { throw "O executável fechou sozinho (código $($p.ExitCode))." }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "O executável abriu e permaneceu em execução."
+
+      - name: Calcular a assinatura SHA-256 (para auditoria da TI)
+        run: |
+          $hash = (Get-FileHash "dist\AnotacoesHospitalares.exe" -Algorithm SHA256).Hash
+          "$hash  AnotacoesHospitalares.exe" | Out-File -Encoding ascii "dist\SHA256.txt"
+          Write-Host "SHA-256: $hash"
+
+      - name: Publicar o executável para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnotacoesHospitalares-windows
+          path: |
+            dist/AnotacoesHospitalares.exe
+            dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
