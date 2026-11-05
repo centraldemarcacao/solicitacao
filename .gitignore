@@ -1,0 +1,13 @@
+# Dados de pacientes: NUNCA enviar ao GitHub
+dados/
+*.db
+*.sqlite
+*.sqlite3
+erros.log
+
+# Arquivos gerados
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
