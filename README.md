@@ -1,0 +1,135 @@
+# Solicitações de Pacientes — Liga Contra o Câncer
+
+Aplicação desktop (Windows) para registro rápido de solicitações de pacientes,
+com banco SQLite local, histórico pesquisável, alteração de status e exclusão.
+
+## Estrutura de arquivos
+
+```
+anotacoes_hospitalares/
+├── main.py            # Ponto de entrada
+├── gui.py             # Janela principal: barra lateral, formulário e histórico
+├── widgets.py         # Componentes visuais (menu, cartões, busca, avisos, diálogos)
+├── icons.py           # Ícones e logotipo desenhados com Pillow
+├── theme.py           # Cores, nome da instituição e fonte
+├── database.py        # SQLite: schema automático e operações
+├── requirements.txt   # Dependências
+├── build.bat          # Gera o .exe com um duplo clique
+├── GUIA_GITHUB_ACTIONS.md  # Gera o .exe pelo navegador, sem instalar nada
+├── .github/workflows/build-exe.yml  # Fluxo do GitHub Actions
+├── .gitignore         # Impede o envio de dados de pacientes
+├── test_database.py   # Testes da camada de banco
+├── icone.ico          # Ícone do programa (gerado por "python icons.py")
+├── logo.png           # (opcional) logotipo oficial da instituição
+└── dados/             # Criada automaticamente; contém o banco e o erros.log
+```
+
+## 1. Pré-requisitos (somente no computador onde o .exe será gerado)
+
+* Windows 10/11
+* Python **3.10 ou superior** (https://www.python.org/downloads/) —
+  marque **"Add Python to PATH"** na instalação. Não instale pela Microsoft Store.
+
+O computador que **usa** o programa não precisa de Python nem de instalação.
+
+## 2. Rodar em modo de desenvolvimento
+
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+Testes do banco de dados:
+
+```bash
+python -m unittest test_database -v
+```
+
+## 3. Gerar o executável (.exe)
+
+### Opção A — um clique
+
+Dê duplo clique em **`build.bat`**. Ele localiza o Python sozinho, instala as
+dependências e gera `dist\AnotacoesHospitalares.exe`. Se existirem
+`icone.ico` e/ou `logo.png` na pasta, são incluídos automaticamente.
+
+### Opção B — comando manual
+
+```bash
+python -m PyInstaller --noconfirm --clean --onefile --windowed --name "AnotacoesHospitalares" --collect-all customtkinter --hidden-import PIL._tkinter_finder --icon "icone.ico" --add-data "icone.ico;." main.py
+```
+
+| Opção | Função |
+|-------|--------|
+| `--onefile` | Gera um único `.exe` |
+| `--windowed` | Não abre janela de console preta |
+| `--collect-all customtkinter` | Inclui temas e arquivos do CustomTkinter (**obrigatório**, senão o .exe abre e fecha) |
+| `--hidden-import PIL._tkinter_finder` | Garante que as imagens/ícones funcionem no .exe |
+| `--icon` / `--add-data` | Ícone do executável e da janela |
+
+### Opção C — sem instalar nada (GitHub Actions)
+
+O projeto inclui o fluxo `.github/workflows/build-exe.yml`, que gera o `.exe`
+em um servidor Windows do GitHub. Veja o passo a passo em
+**`GUIA_GITHUB_ACTIONS.md`**.
+
+## 4. Distribuição
+
+Copie **apenas** `AnotacoesHospitalares.exe` para o computador de destino, em
+uma pasta onde o usuário possa gravar (Documentos, Área de Trabalho).
+Na primeira execução, a pasta `dados` é criada ao lado do `.exe`. Se essa pasta
+não permitir gravação, o programa usa `%LOCALAPPDATA%\AnotacoesHospitalares`.
+O botão **Abrir pasta dos dados**, na barra lateral, mostra onde ficou.
+
+> **Importante:** faça backup periódico da pasta `dados` — é lá que ficam
+> todos os registros.
+
+## 5. Uso
+
+* **Novo registro:** preencha Nome (obrigatório), Contato e Descrição
+  (obrigatória) e clique em **Salvar registro** (ou `Ctrl + S`). Os erros
+  aparecem abaixo do campo. Limites: nome 120, contato 80 e descrição 2000
+  caracteres. À direita, o resumo do dia e os últimos registros.
+* **Histórico:**
+  * Indicadores: total, pendentes e atendidas.
+  * Busca por nome ou contato enquanto você digita (não diferencia maiúsculas
+    nem acentos: "jose" encontra "José").
+  * Filtro por status: Todos, Pendentes ou Atendidas.
+  * Selecione uma ou mais linhas (Ctrl/Shift) e use **Marcar como atendida**
+    ou **Marcar como pendente**.
+  * **Ver detalhes:** botão, duplo clique ou Enter. Na janela de detalhes
+    também é possível alterar o status.
+  * **Excluir:** botão, tecla `Delete` ou clique direito. O programa pede
+    confirmação, pois a exclusão é definitiva.
+* Linhas âmbar claro = Pendente; verde claro = Atendida.
+
+## 6. Personalizar a identidade visual
+
+* **Cores, nome e fonte:** edite `theme.py` e gere o `.exe` novamente.
+* **Logotipo oficial:** salve como `logo.png` na pasta do projeto (fundo
+  transparente ou branco). Ele substitui a marca padrão na barra lateral,
+  sobre uma placa branca.
+* **Ícone do programa:** substitua `icone.ico`, ou rode `python icons.py`
+  para gerar novamente o ícone padrão.
+
+## 7. Segurança e privacidade (LGPD)
+
+Dados de pacientes são **dados pessoais sensíveis**. Antes de usar em produção:
+
+* Obtenha autorização da TI e do responsável pela LGPD da instituição.
+* Restrinja o acesso à pasta `dados` (permissões do Windows).
+* Use criptografia de disco (BitLocker) no computador.
+* Defina política de backup e retenção conforme as normas da instituição.
+* Esta ferramenta é um bloco de anotações de solicitações; **não substitui**
+  o prontuário eletrônico oficial.
+* Registros excluídos não podem ser recuperados.
+
+## 8. Problemas comuns
+
+| Sintoma | Solução |
+|---------|---------|
+| `.exe` abre e fecha na hora | Gere novamente com `--collect-all customtkinter` |
+| Aviso de erro inesperado | Veja o arquivo `erros.log` na pasta `dados` |
+| Antivírus ou SmartScreen bloqueia | Falso positivo comum com `--onefile`; solicite liberação à TI ou gere com `--onedir` |
+| "Python não encontrado" ao rodar o `build.bat` | Instale o Python marcando "Add Python to PATH" (apenas no computador de build) |
+| Logotipo não aparece | Confirme o nome `logo.png` e gere o `.exe` novamente |
