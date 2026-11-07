@@ -100,7 +100,34 @@ def _check_circle(d, c):
     _linha(d, [(19, 33), (28, 42), (45, 24)], c, 6)
 
 
+def _edit(d, c):
+    # lápis na diagonal + linha de base
+    d.polygon([(_s(24.2), _s(48.2)), (_s(15.8), _s(39.8)), (_s(41.8), _s(13.8)),
+               (_s(50.2), _s(22.2))], fill=c)
+    d.polygon([(_s(14), _s(42)), (_s(22), _s(50)), (_s(9), _s(55))], fill=c)
+    _linha(d, [(34, 57), (55, 57)], c, 4.5)
+
+
+def _restore(d, c):
+    # seta circular (restaurar)
+    d.arc(_caixa(10, 10, 54, 54), start=55, end=335, fill=c, width=_s(6))
+    d.polygon([(_s(57), _s(34)), (_s(44), _s(26)), (_s(60), _s(18))], fill=c)
+
+
+def _database(d, c):
+    # cilindro (banco de dados / backup)
+    larg = _s(5)
+    d.ellipse(_caixa(12, 8, 52, 22), outline=c, width=larg)
+    _linha(d, [(12, 15), (12, 49)], c, 5)
+    _linha(d, [(52, 15), (52, 49)], c, 5)
+    d.arc(_caixa(12, 28, 52, 42), start=0, end=180, fill=c, width=larg)
+    d.arc(_caixa(12, 42, 52, 56), start=0, end=180, fill=c, width=larg)
+
+
 _DESENHOS = {
+    "edit": _edit,
+    "restore": _restore,
+    "database": _database,
     "plus": _plus,
     "list": _list,
     "check": _check,

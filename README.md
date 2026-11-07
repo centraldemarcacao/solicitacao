@@ -1,7 +1,20 @@
 # Solicitações de Pacientes — Liga Contra o Câncer
 
 Aplicação desktop (Windows) para registro rápido de solicitações de pacientes,
-com banco SQLite local, histórico pesquisável, alteração de status e exclusão.
+com banco SQLite local, histórico pesquisável, alteração de status, edição, lixeira e backups.
+
+## Novidades da versão 2.1
+
+* **Editar**: botão "Editar", tecla **F2** ou clique direito. Registros editados
+  mostram "Editado em ..." nos detalhes.
+* **Lixeira**: excluir não apaga de vez; o registro vai para a Lixeira e pode ser
+  restaurado em até 30 dias (depois disso é removido automaticamente).
+* **Backup**: cópia automática ao abrir e ao fechar o programa (1 por dia, as 14
+  mais recentes ficam guardadas), backup manual e restauração pela página
+  **Backup**. Antes de restaurar, o programa guarda uma cópia de segurança do
+  estado atual.
+* Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
+  pasta de vez em quando para um pen drive ou nuvem pessoal.
 
 ## Estrutura de arquivos
 
@@ -9,6 +22,8 @@ com banco SQLite local, histórico pesquisável, alteração de status e exclus�
 anotacoes_hospitalares/
 ├── main.py            # Ponto de entrada
 ├── gui.py             # Janela principal: barra lateral, formulário e histórico
+├── paginas.py         # Telas de edição, Lixeira e Backup
+├── util.py            # Funções de texto/data
 ├── widgets.py         # Componentes visuais (menu, cartões, busca, avisos, diálogos)
 ├── icons.py           # Ícones e logotipo desenhados com Pillow
 ├── theme.py           # Cores, nome da instituição e fonte

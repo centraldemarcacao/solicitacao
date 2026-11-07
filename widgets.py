@@ -8,8 +8,11 @@ Componentes visuais reutilizáveis (CustomTkinter):
   - CaixaBusca          campo de busca com ícone e destaque de foco
   - Pilula              etiqueta arredondada (ex.: status)
   - Notificacao         aviso temporário (sucesso, erro, atenção)
+  - TabelaRegistros     tabela com cores por linha e seleção suave
   - DialogoConfirmacao  janela modal de confirmação (ex.: exclusão)
 """
+
+from tkinter import ttk
 
 import customtkinter as ctk
 
@@ -87,6 +90,9 @@ class ItemNavegacao(ctk.CTkFrame):
             text_color=T.NAV_TEXTO, font=fonte(15, "bold"), command=comando,
         )
         self._botao.pack(side="left", fill="x", expand=True, padx=(10, 14))
+
+    def definir_texto(self, texto: str) -> None:
+        self._botao.configure(text=texto)
 
     def marcar(self, ativo: bool) -> None:
         self._botao.configure(
@@ -207,28 +213,169 @@ class Notificacao(ctk.CTkFrame):
         self._tarefa = None
 
 
+class TabelaRegistros(ctk.CTkFrame):
+    """Tabela (ttk.Treeview) com cores por linha e seleção suave.
+
+    Cada linha tem UMA só etiqueta de cor: a "base" (ex.: pendente, atendida,
+    neutra) ou "selecionada". Assim a cor não depende de como cada versão do
+    Tk resolve conflitos entre a cor da etiqueta e a cor de seleção do estilo.
+
+    colunas: lista de (chave, título, largura, estica).
+    px: função que converte tamanho lógico em pixels reais (escala da tela).
+    """
+
+    def __init__(self, pai, colunas, px, ao_selecionar=None, ao_duplo_clique=None) -> None:
+        super().__init__(
+            pai, fg_color=T.BRANCO, corner_radius=0,
+            border_width=1, border_color=T.BORDA,
+        )
+        self._ao_selecionar = ao_selecionar
+        self._ao_duplo_clique = ao_duplo_clique
+        self._tag_base = {}
+        self._sel_aplicada = set()
+        self._estilizar(px)
+
+        self.tree = ttk.Treeview(
+            self, columns=tuple(c[0] for c in colunas), show="headings",
+            style="Hosp.Treeview", selectmode="extended",
+        )
+        for chave, titulo, largura, estica in colunas:
+            self.tree.heading(chave, text=titulo, anchor="w")
+            self.tree.column(chave, width=largura, minwidth=90, anchor="w", stretch=estica)
+        for tag, fundo in (("pendente", T.AMBAR_CLARO), ("atendida", T.VERDE_CLARO),
+                           ("neutra", T.BRANCO), ("selecionada", T.SELECAO)):
+            self.tree.tag_configure(tag, background=fundo, foreground=T.TEXTO)
+
+        barra = ttk.Scrollbar(self, orient="vertical", style="Hosp.Vertical.TScrollbar",
+                              command=self.tree.yview)
+        self.tree.configure(yscrollcommand=barra.set)
+        self.tree.pack(side="left", fill="both", expand=True, padx=(1, 0), pady=1)
+        barra.pack(side="right", fill="y", pady=1, padx=(0, 1))
+
+        # Estado vazio (sobreposto à tabela)
+        self.vazio = ctk.CTkFrame(self, fg_color=T.BRANCO, corner_radius=0)
+        ctk.CTkLabel(self.vazio, text="", image=icone("clipboard", T.BORDA_FORTE, 64)).pack()
+        self._vazio_titulo = ctk.CTkLabel(
+            self.vazio, text="", font=fonte(17, "bold"), text_color=T.TEXTO,
+        )
+        self._vazio_titulo.pack(pady=(8, 0))
+        self._vazio_texto = ctk.CTkLabel(
+            self.vazio, text="", font=fonte(13), text_color=T.TEXTO_SUAVE,
+        )
+        self._vazio_texto.pack()
+
+        self.tree.bind("<<TreeviewSelect>>", self._selecionou)
+        self.tree.bind("<Double-1>", self._duplo_clique)
+
+    @staticmethod
+    def _estilizar(px) -> None:
+        # Widgets ttk não seguem a escala do CustomTkinter: usamos pixels reais
+        # (tamanho negativo = pixels), proporcionais à escala da interface.
+        estilo = ttk.Style()
+        estilo.theme_use("clam")
+        estilo.configure(
+            "Hosp.Treeview", background=T.BRANCO, fieldbackground=T.BRANCO,
+            foreground=T.TEXTO, rowheight=px(40), font=(T.FONTE, -px(14)),
+            borderwidth=0,
+        )
+        estilo.layout("Hosp.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
+        estilo.configure(
+            "Hosp.Treeview.Heading", background=T.NAVY, foreground=T.BRANCO,
+            font=(T.FONTE, -px(14), "bold"), relief="flat", padding=(px(10), px(9)),
+        )
+        estilo.map("Hosp.Treeview.Heading", background=[("active", T.NAVY_ATIVO)])
+        # Corrige o Tk 8.6.9 (Python 3.9), onde as cores de 'tag' ignoravam a seleção
+        sem_tags = [
+            e for e in estilo.map("Hosp.Treeview", query_opt="background")
+            if e[:2] != ("!disabled", "!selected")
+        ]
+        # Seleção suave, com o texto escuro mantido (leitura fácil, nada chamativo).
+        estilo.map(
+            "Hosp.Treeview",
+            background=[("selected", T.SELECAO)] + sem_tags,
+            foreground=[("selected", T.TEXTO)],
+        )
+        estilo.configure(
+            "Hosp.Vertical.TScrollbar", background=T.BORDA_FORTE, troughcolor=T.FUNDO,
+            bordercolor=T.FUNDO, arrowcolor=T.TEXTO_SUAVE, relief="flat",
+        )
+
+    # --- Conteúdo ------------------------------------------------------
+    def preencher(self, linhas) -> None:
+        """linhas: lista de (iid, valores, tag_base). Mantém a seleção atual
+        das linhas que continuam existindo."""
+        anterior = set(self.tree.selection())
+        self.tree.delete(*self.tree.get_children())
+        self._tag_base = {}
+        self._sel_aplicada = set()  # linhas recém-inseridas começam sem seleção
+        for iid, valores, tag in linhas:
+            self._tag_base[iid] = tag
+            self.tree.insert("", "end", iid=iid, tags=(tag,), values=valores)
+        manter = [i for i in anterior if self.tree.exists(i)]
+        if manter:
+            self.tree.selection_set(manter)
+        self._sincronizar()
+
+    def selecionados(self) -> list:
+        return list(self.tree.selection())
+
+    def mostrar_vazio(self, titulo: str, texto: str) -> None:
+        self._vazio_titulo.configure(text=titulo)
+        self._vazio_texto.configure(text=texto)
+        self.vazio.place(relx=0.5, rely=0.5, anchor="center")
+        self.vazio.lift()
+
+    def esconder_vazio(self) -> None:
+        self.vazio.place_forget()
+
+    # --- Seleção -------------------------------------------------------
+    def _sincronizar(self) -> None:
+        """Pinta de 'selecionada' as linhas escolhidas e devolve às demais a cor base."""
+        atual = set(self.tree.selection())
+        for iid in atual ^ self._sel_aplicada:
+            if not self.tree.exists(iid):
+                continue
+            tag = "selecionada" if iid in atual else self._tag_base.get(iid, "neutra")
+            self.tree.item(iid, tags=(tag,))
+        self._sel_aplicada = atual
+
+    def _selecionou(self, _evento=None) -> None:
+        self._sincronizar()
+        if self._ao_selecionar:
+            self._ao_selecionar()
+
+    def _duplo_clique(self, evento) -> None:
+        iid = self.tree.identify_row(evento.y)
+        if iid:
+            self.tree.selection_set(iid)
+            if self._ao_duplo_clique:
+                self._ao_duplo_clique(iid)
+
+
 class DialogoConfirmacao(ctk.CTkToplevel):
     """Janela modal de confirmação. Use `DialogoConfirmacao.perguntar(...)`."""
 
     def __init__(self, pai, titulo: str, destaque: str, mensagem: str,
-                 texto_confirmar: str = "Excluir") -> None:
+                 texto_confirmar: str = "Excluir", nome_icone: str = "trash",
+                 cor: str = T.VERMELHO, cor_hover: str = T.VERMELHO_HOVER,
+                 cor_clara: str = T.VERMELHO_CLARO) -> None:
         super().__init__(pai, fg_color=T.BRANCO)
         self.resultado = False
         self.title(titulo)
         self.resizable(False, False)
         centralizar(self, pai, 480, 300)
 
-        ctk.CTkFrame(self, fg_color=T.VERMELHO, height=6, corner_radius=0).pack(fill="x")
+        ctk.CTkFrame(self, fg_color=cor, height=6, corner_radius=0).pack(fill="x")
         corpo = ctk.CTkFrame(self, fg_color="transparent")
         corpo.pack(fill="both", expand=True, padx=30, pady=(24, 8))
 
         topo = ctk.CTkFrame(corpo, fg_color="transparent")
         topo.pack(fill="x")
         circulo = ctk.CTkFrame(topo, width=56, height=56, corner_radius=28,
-                               fg_color=T.VERMELHO_CLARO)
+                               fg_color=cor_clara)
         circulo.pack(side="left")
         circulo.pack_propagate(False)
-        ctk.CTkLabel(circulo, text="", image=icone("trash", T.VERMELHO, 28)).place(
+        ctk.CTkLabel(circulo, text="", image=icone(nome_icone, cor, 28)).place(
             relx=0.5, rely=0.5, anchor="center"
         )
         textos = ctk.CTkFrame(topo, fg_color="transparent")
@@ -239,7 +386,7 @@ class DialogoConfirmacao(ctk.CTkToplevel):
         ).pack(anchor="w")
         alinhar_esquerda(ctk.CTkLabel(
             textos, text=destaque, font=fonte(14, "bold"),
-            text_color=T.VERMELHO, anchor="w", wraplength=340,
+            text_color=cor, anchor="w", wraplength=340,
         )).pack(anchor="w")
 
         alinhar_esquerda(ctk.CTkLabel(
@@ -251,7 +398,7 @@ class DialogoConfirmacao(ctk.CTkToplevel):
         botoes.pack(fill="x", padx=30, pady=(8, 24))
         ctk.CTkButton(
             botoes, text=texto_confirmar, width=130, height=42,
-            font=fonte(14, "bold"), fg_color=T.VERMELHO, hover_color=T.VERMELHO_HOVER,
+            font=fonte(14, "bold"), fg_color=cor, hover_color=cor_hover,
             command=self._confirmar,
         ).pack(side="right")
         self._cancelar_btn = ctk.CTkButton(
@@ -270,7 +417,8 @@ class DialogoConfirmacao(ctk.CTkToplevel):
 
     @classmethod
     def perguntar(cls, pai, titulo: str, destaque: str, mensagem: str,
-                  texto_confirmar: str = "Excluir") -> bool:
-        dialogo = cls(pai, titulo, destaque, mensagem, texto_confirmar)
+                  texto_confirmar: str = "Excluir", **estilo) -> bool:
+        """`estilo` aceita nome_icone, cor, cor_hover e cor_clara."""
+        dialogo = cls(pai, titulo, destaque, mensagem, texto_confirmar, **estilo)
         pai.wait_window(dialogo)
         return dialogo.resultado

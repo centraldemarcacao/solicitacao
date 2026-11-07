@@ -4,10 +4,11 @@ gui.py
 Janela principal do sistema de registro de solicitações (CustomTkinter).
 
 Estrutura:
-  - Barra lateral: marca, menu, relógio e atalho para a pasta de dados.
-  - Página "Novo registro": formulário com validação + resumo e últimos registros.
-  - Página "Histórico": indicadores, busca, filtro, tabela e ações
-    (marcar como atendida/pendente, ver detalhes, excluir).
+  - Barra lateral: marca, menu, relógio.
+  - Novo registro: formulário com validação + resumo e últimos registros.
+  - Histórico: indicadores, busca, filtro, tabela e ações
+    (marcar como atendida/pendente, detalhes, editar, excluir).
+  - Lixeira e Backup: veja paginas.py.
 
 Logotipo oficial (opcional): salve como "logo.png" ao lado do programa.
 Cores, nome da instituição e fonte: veja theme.py.
@@ -18,21 +19,22 @@ import sys
 import tkinter as tk
 import traceback
 from datetime import datetime
-from tkinter import messagebox, ttk
+from tkinter import messagebox
 
 import customtkinter as ctk
 
 import theme as T
 from database import (
-    MAX_CONTATO,
+    DIAS_LIXEIRA,
     MAX_DESCRICAO,
-    MAX_NOME,
     STATUS_ATENDIDA,
     STATUS_PENDENTE,
     Database,
+    validar_campos,
 )
 from icons import icone
-from icons import imagem as imagem_icone
+from paginas import PaginasExtrasMixin
+from util import cores_status, data_curta, formatar_data, plural, resumir
 from widgets import (
     CaixaBusca,
     CartaoNumero,
@@ -40,6 +42,7 @@ from widgets import (
     ItemNavegacao,
     Notificacao,
     Pilula,
+    TabelaRegistros,
     alinhar_esquerda,
     centralizar,
     fonte,
@@ -48,10 +51,12 @@ from widgets import (
 
 PAG_NOVO = "novo"
 PAG_HIST = "historico"
+PAG_LIXO = "lixeira"
+PAG_BACKUP = "backup"
 
 # Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
 LARGURA_BASE, ALTURA_BASE = 1240, 780
-MINIMO_LARGURA, MINIMO_ALTURA = 1080, 700
+MINIMO_LARGURA, MINIMO_ALTURA = 1140, 700
 
 FILTROS_STATUS = {
     "Todos": None,
@@ -63,36 +68,6 @@ DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
         "sexta-feira", "sábado", "domingo"]
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
          "agosto", "setembro", "outubro", "novembro", "dezembro"]
-
-
-# ----------------------------------------------------------------------
-# Funções auxiliares de texto e arquivos
-# ----------------------------------------------------------------------
-def plural(n: int, singular: str, plural_: str) -> str:
-    """plural(1, 'registro', 'registros') -> '1 registro'."""
-    return f"{n} {singular if n == 1 else plural_}"
-
-
-def formatar_data(valor: str) -> str:
-    """'2026-11-04 18:45:00' -> '04/11/2026 18:45'."""
-    try:
-        return datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").strftime("%d/%m/%Y %H:%M")
-    except (ValueError, TypeError):
-        return valor or ""
-
-
-def data_curta(valor: str) -> str:
-    """'2026-11-04 18:45:00' -> '04/11 18:45'."""
-    try:
-        return datetime.strptime(valor, "%Y-%m-%d %H:%M:%S").strftime("%d/%m %H:%M")
-    except (ValueError, TypeError):
-        return valor or ""
-
-
-def resumir(texto: str, limite: int) -> str:
-    """Junta quebras de linha e corta com reticências."""
-    texto = " ".join((texto or "").split())
-    return texto if len(texto) <= limite else texto[: limite - 1].rstrip() + "…"
 
 
 def localizar_arquivo(nome: str):
@@ -110,17 +85,10 @@ def localizar_arquivo(nome: str):
     return None
 
 
-def cores_status(status: str):
-    """(fundo, texto) da etiqueta de status."""
-    if status == STATUS_ATENDIDA:
-        return T.VERDE_CLARO, T.VERDE
-    return T.AMBAR_CLARO, T.AMBAR
-
-
 # ======================================================================
 # Janela principal
 # ======================================================================
-class App(ctk.CTk):
+class App(PaginasExtrasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -146,8 +114,7 @@ class App(ctk.CTk):
         self._com_erro = set()      # campos do formulário com erro
         self._rotulos_erro = {}     # campo -> rótulo da mensagem de erro
         self._total_exibido = 0
-        self._status_linha = {}     # id da linha -> status (para recolorir)
-        self._sel_aplicada = set()  # linhas que já estão com a cor de seleção
+        self._total_lixeira = 0
 
         try:
             self.db = Database()
@@ -162,6 +129,15 @@ class App(ctk.CTk):
             raise SystemExit(1)
 
         self.report_callback_exception = self._erro_inesperado
+        self.protocol("WM_DELETE_WINDOW", self._ao_fechar)
+
+        # Rotina de abertura: limpa a lixeira antiga e garante o backup do dia.
+        aviso_inicial = None
+        try:
+            self.db.limpar_lixeira_antiga()
+            self.db.backup_automatico()
+        except Exception as exc:
+            aviso_inicial = f"Não foi possível criar o backup automático: {exc}"
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -173,6 +149,8 @@ class App(ctk.CTk):
         self.mostrar_pagina(PAG_NOVO)
         self.atualizar_tudo()
         self._atualizar_relogio()
+        if aviso_inicial:
+            self.toast.mostrar(aviso_inicial, "erro", 8000)
 
     # ==================================================================
     # Escala e tamanho da janela
@@ -239,6 +217,8 @@ class App(ctk.CTk):
         for chave, texto, nome_icone in (
             (PAG_NOVO, "Novo registro", "plus"),
             (PAG_HIST, "Histórico", "list"),
+            (PAG_LIXO, "Lixeira", "trash"),
+            (PAG_BACKUP, "Backup", "database"),
         ):
             item = ItemNavegacao(barra, texto, nome_icone,
                                  lambda c=chave: self.mostrar_pagina(c))
@@ -250,13 +230,6 @@ class App(ctk.CTk):
             barra, text=f"Dados salvos apenas neste computador  •  v{T.VERSAO}",
             font=fonte(11), text_color=T.NAV_SUAVE, wraplength=220, anchor="w",
         ).pack(side="bottom", anchor="w", padx=24, pady=(0, 20))
-
-        ctk.CTkButton(
-            barra, text="Abrir pasta dos dados", height=38, font=fonte(13, "bold"),
-            fg_color="transparent", text_color=T.NAV_TEXTO, border_width=1,
-            border_color=T.NAV_LINHA, hover_color=T.NAVY_HOVER,
-            command=self.abrir_pasta_dados,
-        ).pack(side="bottom", fill="x", padx=22, pady=(0, 14))
 
         relogio = ctk.CTkFrame(barra, fg_color=T.NAVY_HOVER, corner_radius=14)
         relogio.pack(side="bottom", fill="x", padx=22, pady=(0, 14))
@@ -299,6 +272,8 @@ class App(ctk.CTk):
         self.paginas = {
             PAG_NOVO: self._criar_pagina_novo(self.area),
             PAG_HIST: self._criar_pagina_historico(self.area),
+            PAG_LIXO: self._criar_pagina_lixeira(self.area),
+            PAG_BACKUP: self._criar_pagina_backup(self.area),
         }
         self.toast = Notificacao(self.area)
 
@@ -312,6 +287,10 @@ class App(ctk.CTk):
             item.marcar(k == chave)
         if chave == PAG_HIST:
             self.atualizar_historico()
+        elif chave == PAG_LIXO:
+            self.atualizar_lixeira()
+        elif chave == PAG_BACKUP:
+            self.atualizar_backups()
         else:
             self.ent_nome.focus_set()
 
@@ -520,32 +499,18 @@ class App(ctk.CTk):
         descricao = self._texto(self.txt_desc)
 
         self._limpar_todos_erros()
-        problemas = []        # (campo, mensagem)
-        obrigatorio_vazio = False
-
-        if not nome:
-            problemas.append((self.ent_nome, "Informe o nome do paciente."))
-            obrigatorio_vazio = True
-        elif len(nome) > MAX_NOME:
-            problemas.append((self.ent_nome, f"Use no máximo {MAX_NOME} caracteres."))
-
-        if len(contato) > MAX_CONTATO:
-            problemas.append((self.ent_contato, f"Use no máximo {MAX_CONTATO} caracteres."))
-
-        if not descricao:
-            problemas.append((self.txt_desc, "Descreva a solicitação."))
-            obrigatorio_vazio = True
-        elif len(descricao) > MAX_DESCRICAO:
-            problemas.append(
-                (self.txt_desc, f"Use no máximo {MAX_DESCRICAO} caracteres.")
-            )
-
-        if problemas:
-            for campo, mensagem in problemas:
-                self._marcar_erro(campo, mensagem)
-            problemas[0][0].focus_set()
+        erros = validar_campos(nome, contato, descricao)
+        if erros:
+            campos = {"nome": self.ent_nome, "contato": self.ent_contato,
+                      "descricao": self.txt_desc}
+            primeiro = None
+            for chave in ("nome", "contato", "descricao"):
+                if chave in erros:
+                    self._marcar_erro(campos[chave], erros[chave])
+                    primeiro = primeiro or campos[chave]
+            primeiro.focus_set()
             self.toast.mostrar(
-                "Preencha os campos obrigatórios." if obrigatorio_vazio
+                "Preencha os campos obrigatórios." if (not nome or not descricao)
                 else "Corrija os campos destacados.",
                 "erro",
             )
@@ -652,7 +617,7 @@ class App(ctk.CTk):
         pagina = ctk.CTkFrame(pai, fg_color="transparent")
         self._cabecalho(
             pagina, "Histórico de registros",
-            "Consulte, filtre e atualize as solicitações registradas.",
+            "Consulte, filtre, edite e atualize as solicitações registradas.",
         )
 
         # --- Indicadores ---------------------------------------------
@@ -685,34 +650,42 @@ class App(ctk.CTk):
         self.filtro_status.set("Todos")
         self.filtro_status.pack(side="right")
 
+        # Ações. O botão da direita é empacotado primeiro: nunca fica escondido.
         linha2 = ctk.CTkFrame(card, fg_color="transparent")
         linha2.pack(fill="x", padx=22, pady=(0, 14))
         ctk.CTkButton(
-            linha2, text="Marcar como atendida", height=40, corner_radius=10,
-            image=icone("check", T.BRANCO, 18), compound="left",
-            font=fonte(13, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER,
-            command=lambda: self.alterar_status(STATUS_ATENDIDA),
-        ).pack(side="left")
-        ctk.CTkButton(
-            linha2, text="Marcar como pendente", height=40, corner_radius=10,
-            image=icone("clock", T.BRANCO, 18), compound="left",
-            font=fonte(13, "bold"), fg_color=T.AMBAR, hover_color=T.AMBAR_HOVER,
-            command=lambda: self.alterar_status(STATUS_PENDENTE),
-        ).pack(side="left", padx=10)
-        ctk.CTkButton(
-            linha2, text="Ver detalhes", height=40, corner_radius=10,
-            image=icone("eye", T.TEAL, 18), compound="left",
-            font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
-            border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
-            command=self.ver_detalhes,
-        ).pack(side="left")
-        ctk.CTkButton(
-            linha2, text="Excluir", height=40, width=120, corner_radius=10,
+            linha2, text="Excluir", height=40, width=110, corner_radius=10,
             image=icone("trash", T.VERMELHO, 18), compound="left",
             font=fonte(13, "bold"), fg_color="transparent", text_color=T.VERMELHO,
             border_width=2, border_color=T.VERMELHO, hover_color=T.VERMELHO_CLARO,
             command=self.excluir_selecionados,
         ).pack(side="right")
+        ctk.CTkButton(
+            linha2, text="Atendida", height=40, corner_radius=10,
+            image=icone("check", T.BRANCO, 18), compound="left",
+            font=fonte(13, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER,
+            command=lambda: self.alterar_status(STATUS_ATENDIDA),
+        ).pack(side="left")
+        ctk.CTkButton(
+            linha2, text="Pendente", height=40, corner_radius=10,
+            image=icone("clock", T.BRANCO, 18), compound="left",
+            font=fonte(13, "bold"), fg_color=T.AMBAR, hover_color=T.AMBAR_HOVER,
+            command=lambda: self.alterar_status(STATUS_PENDENTE),
+        ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            linha2, text="Detalhes", height=40, corner_radius=10,
+            image=icone("eye", T.TEAL, 18), compound="left",
+            font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
+            border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
+            command=self.ver_detalhes,
+        ).pack(side="left", padx=(24, 0))
+        ctk.CTkButton(
+            linha2, text="Editar", height=40, corner_radius=10,
+            image=icone("edit", T.TEAL, 18), compound="left",
+            font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
+            border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
+            command=self.editar_registro,
+        ).pack(side="left", padx=(8, 0))
 
         # Rodapé preso à base do cartão: em janelas baixas, quem encolhe é a tabela.
         rodape = ctk.CTkFrame(card, fg_color="transparent")
@@ -724,100 +697,33 @@ class App(ctk.CTk):
         self.lbl_contagem.pack(side="left")
         ctk.CTkLabel(
             rodape,
-            text="Duplo clique: ver detalhes   •   Delete: excluir   •   Clique direito: mais opções",
+            text="Duplo clique: detalhes   •   F2: editar   •   Delete: excluir   •   Clique direito: mais opções",
             font=fonte(12), text_color=T.TEXTO_SUAVE, anchor="e",
         ).pack(side="right")
 
-        self._montar_tabela(card)
+        self.tabela = TabelaRegistros(
+            card,
+            [("data_hora", "Data/Hora", 150, False), ("nome", "Paciente", 210, False),
+             ("contato", "Contato", 170, False), ("descricao", "Descrição", 340, True),
+             ("status", "Status", 110, False)],
+            self._px,
+            ao_selecionar=self._atualizar_rodape,
+            ao_duplo_clique=lambda _iid: self.ver_detalhes(),
+        )
+        self.tabela.pack(fill="both", expand=True, padx=22, pady=(0, 12))
+        self._configurar_interacoes_tabela()
         return pagina
 
-    def _montar_tabela(self, card) -> None:
-        corpo = ctk.CTkFrame(card, fg_color=T.BRANCO, corner_radius=0,
-                             border_width=1, border_color=T.BORDA)
-        corpo.pack(fill="both", expand=True, padx=22, pady=(0, 12))
-
-        estilo = ttk.Style(self)
-        estilo.theme_use("clam")
-        # Widgets ttk não seguem a escala do CustomTkinter: usamos pixels reais
-        # (tamanho negativo = pixels), proporcionais à escala da interface.
-        estilo.configure(
-            "Hosp.Treeview", background=T.BRANCO, fieldbackground=T.BRANCO,
-            foreground=T.TEXTO, rowheight=self._px(40),
-            font=(T.FONTE, -self._px(14)), borderwidth=0,
-        )
-        estilo.layout("Hosp.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
-        estilo.configure(
-            "Hosp.Treeview.Heading", background=T.NAVY, foreground=T.BRANCO,
-            font=(T.FONTE, -self._px(14), "bold"), relief="flat",
-            padding=(self._px(10), self._px(9)),
-        )
-        estilo.map("Hosp.Treeview.Heading", background=[("active", T.NAVY_ATIVO)])
-        # Corrige o Tk 8.6.9 (Python 3.9), onde as cores de 'tag' ignoravam a seleção
-        sem_tags = [
-            e for e in estilo.map("Hosp.Treeview", query_opt="background")
-            if e[:2] != ("!disabled", "!selected")
-        ]
-        # Seleção suave, com o texto escuro mantido (leitura fácil, nada chamativo).
-        estilo.map(
-            "Hosp.Treeview",
-            background=[("selected", T.SELECAO)] + sem_tags,
-            foreground=[("selected", T.TEXTO)],
-        )
-        estilo.configure(
-            "Hosp.Vertical.TScrollbar", background=T.BORDA_FORTE, troughcolor=T.FUNDO,
-            bordercolor=T.FUNDO, arrowcolor=T.TEXTO_SUAVE, relief="flat",
-        )
-
-        colunas = ("data_hora", "nome", "contato", "descricao", "status")
-        self.tabela = ttk.Treeview(
-            corpo, columns=colunas, show="headings",
-            style="Hosp.Treeview", selectmode="extended",
-        )
-        cabecalhos = {
-            "data_hora": ("Data/Hora", 150),
-            "nome": ("Paciente", 210),
-            "contato": ("Contato", 170),
-            "descricao": ("Descrição", 340),
-            "status": ("Status", 110),
-        }
-        for coluna, (titulo, largura) in cabecalhos.items():
-            self.tabela.heading(coluna, text=titulo, anchor="w")
-            self.tabela.column(coluna, width=largura, minwidth=90, anchor="w",
-                               stretch=(coluna == "descricao"))
-        # Cada linha tem UMA só etiqueta (status ou "selecionada"). Assim a cor
-        # não depende de como cada versão do Tk resolve conflitos entre a cor
-        # da etiqueta e a cor de seleção do estilo.
-        self.tabela.tag_configure("pendente", background=T.AMBAR_CLARO, foreground=T.TEXTO)
-        self.tabela.tag_configure("atendida", background=T.VERDE_CLARO, foreground=T.TEXTO)
-        self.tabela.tag_configure("selecionada", background=T.SELECAO, foreground=T.TEXTO)
-
-        barra = ttk.Scrollbar(corpo, orient="vertical", style="Hosp.Vertical.TScrollbar",
-                              command=self.tabela.yview)
-        self.tabela.configure(yscrollcommand=barra.set)
-        self.tabela.pack(side="left", fill="both", expand=True, padx=(1, 0), pady=1)
-        barra.pack(side="right", fill="y", pady=1, padx=(0, 1))
-
-        # Estado vazio (sobreposto à tabela)
-        self.vazio = ctk.CTkFrame(corpo, fg_color=T.BRANCO, corner_radius=0)
-        ctk.CTkLabel(self.vazio, text="", image=icone("clipboard", T.BORDA_FORTE, 64)).pack()
-        self.lbl_vazio_titulo = ctk.CTkLabel(
-            self.vazio, text="", font=fonte(17, "bold"), text_color=T.TEXTO,
-        )
-        self.lbl_vazio_titulo.pack(pady=(8, 0))
-        self.lbl_vazio_texto = ctk.CTkLabel(
-            self.vazio, text="", font=fonte(13), text_color=T.TEXTO_SUAVE,
-        )
-        self.lbl_vazio_texto.pack()
-
-        # Interações
-        self.tabela.bind("<<TreeviewSelect>>", self._ao_selecionar)
-        self.tabela.bind("<Double-1>", self._duplo_clique)
-        self.tabela.bind("<Return>", lambda _e: self.ver_detalhes())
-        self.tabela.bind("<Delete>", lambda _e: self.excluir_selecionados())
-        self.tabela.bind("<Button-3>", self._abrir_menu_contexto)
+    def _configurar_interacoes_tabela(self) -> None:
+        arvore = self.tabela.tree
+        arvore.bind("<Return>", lambda _e: self.ver_detalhes())
+        arvore.bind("<F2>", lambda _e: self.editar_registro())
+        arvore.bind("<Delete>", lambda _e: self.excluir_selecionados())
+        arvore.bind("<Button-3>", self._abrir_menu_contexto)
 
         self.menu_contexto = tk.Menu(self, tearoff=0, font=(T.FONTE, 11))
         self.menu_contexto.add_command(label="Ver detalhes", command=self.ver_detalhes)
+        self.menu_contexto.add_command(label="Editar", command=self.editar_registro)
         self.menu_contexto.add_separator()
         self.menu_contexto.add_command(
             label="Marcar como atendida",
@@ -831,46 +737,33 @@ class App(ctk.CTk):
         self.menu_contexto.add_command(label="Excluir", command=self.excluir_selecionados)
 
     # --- Atualização da tabela e indicadores ---------------------------
+    @staticmethod
+    def _tag_status(status: str) -> str:
+        return "atendida" if status == STATUS_ATENDIDA else "pendente"
+
     def atualizar_historico(self) -> None:
         if not hasattr(self, "tabela"):
             return  # interface ainda em construção
-
-        selecao_anterior = set(self.tabela.selection())
-        self.tabela.delete(*self.tabela.get_children())
 
         filtro = self.busca.get()
         status = FILTROS_STATUS.get(self.filtro_status.get())
         registros = self.db.listar(filtro, status)
 
-        self._status_linha = {}
-        self._sel_aplicada = set()  # linhas recém-inseridas começam sem seleção
-        for rid, data_hora, nome, contato, descricao, st in registros:
-            self._status_linha[str(rid)] = st
-            self.tabela.insert(
-                "", "end", iid=str(rid), tags=(self._tag_status(st),),
-                values=(formatar_data(data_hora), nome, contato,
-                        " ".join(descricao.split()), st),
-            )
-
-        manter = [i for i in selecao_anterior if self.tabela.exists(i)]
-        if manter:
-            self.tabela.selection_set(manter)
-        self._sincronizar_selecao()
+        self.tabela.preencher([
+            (str(rid), (formatar_data(data_hora), nome, contato,
+                        " ".join(descricao.split()), st), self._tag_status(st))
+            for rid, data_hora, nome, contato, descricao, st in registros
+        ])
 
         self._total_exibido = len(registros)
         if registros:
-            self.vazio.place_forget()
+            self.tabela.esconder_vazio()
+        elif filtro or status:
+            self.tabela.mostrar_vazio("Nenhum registro encontrado",
+                                      "Tente outro nome, contato ou filtro.")
         else:
-            if filtro or status:
-                self.lbl_vazio_titulo.configure(text="Nenhum registro encontrado")
-                self.lbl_vazio_texto.configure(text="Tente outro nome, contato ou filtro.")
-            else:
-                self.lbl_vazio_titulo.configure(text="Nenhuma solicitação registrada ainda")
-                self.lbl_vazio_texto.configure(
-                    text="Use “Novo registro” no menu para criar a primeira."
-                )
-            self.vazio.place(relx=0.5, rely=0.5, anchor="center")
-            self.vazio.lift()
+            self.tabela.mostrar_vazio("Nenhuma solicitação registrada ainda",
+                                      "Use “Novo registro” no menu para criar a primeira.")
 
         contagem = self.db.contar_por_status()
         pend, aten = contagem[STATUS_PENDENTE], contagem[STATUS_ATENDIDA]
@@ -879,28 +772,9 @@ class App(ctk.CTk):
         self.cartao_aten.definir(aten)
         self._atualizar_rodape()
 
-    @staticmethod
-    def _tag_status(status: str) -> str:
-        return "atendida" if status == STATUS_ATENDIDA else "pendente"
-
-    def _ao_selecionar(self, _evento=None) -> None:
-        self._sincronizar_selecao()
-        self._atualizar_rodape()
-
-    def _sincronizar_selecao(self) -> None:
-        """Pinta de 'selecionada' as linhas escolhidas e devolve às demais a cor do status."""
-        atual = set(self.tabela.selection())
-        for iid in atual ^ self._sel_aplicada:
-            if not self.tabela.exists(iid):
-                continue
-            tag = ("selecionada" if iid in atual
-                   else self._tag_status(self._status_linha.get(iid, STATUS_PENDENTE)))
-            self.tabela.item(iid, tags=(tag,))
-        self._sel_aplicada = atual
-
     def _atualizar_rodape(self) -> None:
         texto = plural(self._total_exibido, "registro exibido", "registros exibidos")
-        selecionados = len(self.tabela.selection())
+        selecionados = len(self.tabela.selecionados())
         if selecionados:
             texto += f"   •   {plural(selecionados, 'selecionado', 'selecionados')}"
         self.lbl_contagem.configure(text=texto)
@@ -908,23 +782,23 @@ class App(ctk.CTk):
     def atualizar_tudo(self) -> None:
         self.atualizar_historico()
         self.atualizar_lateral()
+        self.atualizar_lixeira()
 
     # --- Ações sobre registros ------------------------------------------
     def _ids_selecionados(self) -> list:
-        return [int(i) for i in self.tabela.selection()]
+        return [int(i) for i in self.tabela.selecionados()]
 
     def _definir_status(self, ids: list, novo_status: str) -> None:
         for rid in ids:
             self.db.atualizar_status(rid, novo_status)
         self.atualizar_tudo()
         atendida = novo_status == STATUS_ATENDIDA
-        texto = plural(len(ids), "registro marcado", "registros marcados")
-        self.toast.mostrar(
-            f"{texto} como {'atendido' if atendida else 'pendente'}."
-            if len(ids) == 1
-            else f"{texto} como {'atendidos' if atendida else 'pendentes'}.",
-            "sucesso" if atendida else "aviso",
-        )
+        if len(ids) == 1:
+            texto = f"Registro marcado como {'atendido' if atendida else 'pendente'}."
+        else:
+            texto = (f"{len(ids)} registros marcados como "
+                     f"{'atendidos' if atendida else 'pendentes'}.")
+        self.toast.mostrar(texto, "sucesso" if atendida else "aviso")
 
     def alterar_status(self, novo_status: str) -> None:
         ids = self._ids_selecionados()
@@ -934,6 +808,7 @@ class App(ctk.CTk):
         self._definir_status(ids, novo_status)
 
     def excluir_selecionados(self) -> None:
+        """Move os registros selecionados para a lixeira (após confirmação)."""
         ids = self._ids_selecionados()
         if not ids:
             self.toast.mostrar("Selecione ao menos um registro para excluir.", "aviso")
@@ -949,35 +824,34 @@ class App(ctk.CTk):
 
         confirmou = DialogoConfirmacao.perguntar(
             self, titulo, destaque,
-            "Esta ação é definitiva: os dados excluídos não poderão ser recuperados.",
+            f"Os registros vão para a Lixeira e podem ser restaurados em até "
+            f"{DIAS_LIXEIRA} dias.",
             "Excluir",
+            nome_icone="trash", cor=T.AMBAR, cor_hover=T.AMBAR_HOVER,
+            cor_clara=T.AMBAR_CLARO,
         )
         if not confirmou:
             return
 
         try:
-            removidos = self.db.excluir_varios(ids)
+            movidos = self.db.excluir_varios(ids)
         except Exception as exc:
             self.toast.mostrar(f"Não foi possível excluir: {exc}", "erro", 6000)
             return
 
         self.atualizar_tudo()
         self.toast.mostrar(
-            f"{plural(removidos, 'registro excluído', 'registros excluídos')}.", "erro"
+            f"{plural(movidos, 'registro movido', 'registros movidos')} para a lixeira.",
+            "aviso",
         )
 
-    def _duplo_clique(self, evento) -> None:
-        iid = self.tabela.identify_row(evento.y)
-        if iid:
-            self.tabela.selection_set(iid)
-            self.ver_detalhes()
-
     def _abrir_menu_contexto(self, evento) -> None:
-        iid = self.tabela.identify_row(evento.y)
+        arvore = self.tabela.tree
+        iid = arvore.identify_row(evento.y)
         if not iid:
             return
-        if iid not in self.tabela.selection():
-            self.tabela.selection_set(iid)
+        if iid not in arvore.selection():
+            arvore.selection_set(iid)
         try:
             self.menu_contexto.tk_popup(evento.x_root, evento.y_root)
         finally:
@@ -989,15 +863,15 @@ class App(ctk.CTk):
         if not ids:
             self.toast.mostrar("Selecione um registro para ver os detalhes.", "aviso")
             return
-        reg = self.db.obter(ids[0])
+        reg = self.db.obter_detalhado(ids[0])
         if not reg:
             return
-        rid, data_hora, nome, contato, descricao, status = reg
+        rid, status = reg["id"], reg["status"]
 
         janela = ctk.CTkToplevel(self, fg_color=T.FUNDO)
         janela.title(f"Solicitação nº {rid}")
         janela.resizable(False, False)
-        centralizar(janela, self, 640, 580)
+        centralizar(janela, self, 640, 600)
 
         banda = ctk.CTkFrame(janela, fg_color=T.NAVY, corner_radius=0)
         banda.pack(fill="x")
@@ -1006,18 +880,22 @@ class App(ctk.CTk):
         fundo, cor_texto = cores_status(status)
         Pilula(interno, status, fundo, cor_texto).pack(side="right", anchor="n")
         alinhar_esquerda(ctk.CTkLabel(
-            interno, text=nome, font=fonte(22, "bold"), text_color=T.BRANCO,
+            interno, text=reg["nome"], font=fonte(22, "bold"), text_color=T.BRANCO,
             anchor="w", wraplength=440,
         )).pack(side="left", anchor="w")
         ctk.CTkFrame(janela, fg_color=T.TEAL_ACENTO, height=4, corner_radius=0).pack(fill="x")
+
+        # Botões presos à base: em telas baixas quem encolhe é a descrição.
+        botoes = ctk.CTkFrame(janela, fg_color="transparent")
+        botoes.pack(side="bottom", fill="x", padx=28, pady=(0, 24))
 
         meta = ctk.CTkFrame(janela, fg_color="transparent")
         meta.pack(fill="x", padx=28, pady=(20, 4))
         for i in range(3):
             meta.grid_columnconfigure(i, weight=1, uniform="meta")
         for coluna, (titulo, valor) in enumerate((
-            ("DATA E HORA", formatar_data(data_hora)),
-            ("CONTATO", contato or "Não informado"),
+            ("DATA E HORA", formatar_data(reg["data_hora"])),
+            ("CONTATO", reg["contato"] or "Não informado"),
             ("Nº DO REGISTRO", f"{rid}"),
         )):
             bloco = ctk.CTkFrame(meta, fg_color="transparent")
@@ -1029,20 +907,26 @@ class App(ctk.CTk):
                 anchor="w", wraplength=170,
             )).pack(anchor="w")
 
+        titulo_desc = ctk.CTkFrame(janela, fg_color="transparent")
+        titulo_desc.pack(fill="x", padx=28, pady=(16, 6))
         ctk.CTkLabel(
-            janela, text="DESCRIÇÃO DA SOLICITAÇÃO", font=fonte(11, "bold"),
+            titulo_desc, text="DESCRIÇÃO DA SOLICITAÇÃO", font=fonte(11, "bold"),
             text_color=T.TEXTO_SUAVE, anchor="w",
-        ).pack(fill="x", padx=28, pady=(16, 6))
+        ).pack(side="left")
+        if reg["editado_em"]:
+            ctk.CTkLabel(
+                titulo_desc, text=f"Editado em {formatar_data(reg['editado_em'])}",
+                font=fonte(12), text_color=T.TEXTO_SUAVE, anchor="e",
+            ).pack(side="right")
+
         caixa = ctk.CTkTextbox(
             janela, font=fonte(15), fg_color=T.BRANCO, text_color=T.TEXTO,
             border_width=1, border_color=T.BORDA, corner_radius=10, wrap="word",
         )
         caixa.pack(fill="both", expand=True, padx=28, pady=(0, 16))
-        caixa.insert("1.0", descricao)
+        caixa.insert("1.0", reg["descricao"])
         caixa.configure(state="disabled")
 
-        botoes = ctk.CTkFrame(janela, fg_color="transparent")
-        botoes.pack(fill="x", padx=28, pady=(0, 24))
         novo = STATUS_PENDENTE if status == STATUS_ATENDIDA else STATUS_ATENDIDA
         ctk.CTkButton(
             botoes, height=42, corner_radius=10, font=fonte(14, "bold"),
@@ -1054,7 +938,14 @@ class App(ctk.CTk):
             command=lambda: (janela.destroy(), self._definir_status([rid], novo)),
         ).pack(side="left")
         ctk.CTkButton(
-            botoes, text="Fechar", width=120, height=42, corner_radius=10,
+            botoes, text="Editar", height=42, width=110, corner_radius=10,
+            image=icone("edit", T.TEAL, 18), compound="left",
+            font=fonte(14, "bold"), fg_color="transparent", text_color=T.TEAL,
+            border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
+            command=lambda: (janela.destroy(), self.editar_registro(rid)),
+        ).pack(side="left", padx=(10, 0))
+        ctk.CTkButton(
+            botoes, text="Fechar", width=110, height=42, corner_radius=10,
             font=fonte(14, "bold"), fg_color="transparent", text_color=T.TEXTO,
             border_width=2, border_color=T.BORDA_FORTE, hover_color=T.FUNDO,
             command=janela.destroy,
@@ -1073,14 +964,13 @@ class App(ctk.CTk):
         )
         self.after(20000, self._atualizar_relogio)
 
-    def abrir_pasta_dados(self) -> None:
-        pasta = os.path.dirname(self.db.caminho)
+    def _ao_fechar(self) -> None:
+        """Ao fechar a janela, atualiza o backup do dia."""
         try:
-            if not hasattr(os, "startfile"):
-                raise OSError("recurso disponível somente no Windows")
-            os.startfile(pasta)
+            self.db.backup_automatico(sobrescrever=True)
         except Exception:
-            self.toast.mostrar(f"Pasta dos dados: {pasta}", "info", 8000)
+            pass  # não impede o programa de fechar
+        self.destroy()
 
     def _erro_inesperado(self, exc, valor, tb) -> None:
         """Erros não tratados: grava em erros.log e avisa sem fechar o programa."""

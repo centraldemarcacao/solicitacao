@@ -1,11 +1,15 @@
 """Testes da camada de banco (rodar: python test_database.py)."""
 
 import os
+import sqlite3
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 
 from database import (
+    BACKUPS_MANTER,
     caminho_banco,
+    validar_campos,
     MAX_DESCRICAO,
     MAX_NOME,
     STATUS_ATENDIDA,
@@ -133,6 +137,199 @@ class TestDatabase(unittest.TestCase):
         import os as _os
         caminho = caminho_banco()
         self.assertTrue(_os.path.isdir(_os.path.dirname(caminho)))
+
+    # ---------------- edição ----------------
+    def test_atualizar_registro(self):
+        rid = self.db.inserir("Ana", "1", "original")
+        self.assertIsNone(self.db.obter_detalhado(rid)["editado_em"])
+        self.assertTrue(self.db.atualizar(rid, "  Ana Maria ", "2", " corrigido "))
+        reg = self.db.obter_detalhado(rid)
+        self.assertEqual((reg["nome"], reg["contato"], reg["descricao"]), ("Ana Maria", "2", "corrigido"))
+        self.assertIsNotNone(reg["editado_em"])
+        self.assertEqual(reg["status"], STATUS_PENDENTE)       # status não muda ao editar
+        self.assertEqual(reg["data_hora"], self.db.obter(rid)[1])  # data original preservada
+
+    def test_atualizar_valida_campos(self):
+        rid = self.db.inserir("Ana", "", "x")
+        with self.assertRaises(ValueError):
+            self.db.atualizar(rid, "   ", "", "x")
+        with self.assertRaises(ValueError):
+            self.db.atualizar(rid, "Ana", "", "")
+        with self.assertRaises(ValueError):
+            self.db.atualizar(rid, "A" * (MAX_NOME + 1), "", "x")
+        self.assertEqual(self.db.obter(rid)[2], "Ana")          # nada foi alterado
+
+    def test_atualizar_inexistente_ou_na_lixeira(self):
+        self.assertFalse(self.db.atualizar(999, "Ana", "", "x"))
+        rid = self.db.inserir("Ana", "", "x")
+        self.db.excluir(rid)
+        self.assertFalse(self.db.atualizar(rid, "Novo", "", "x"))
+
+    def test_validar_campos(self):
+        self.assertEqual(validar_campos("Ana", "", "x"), {})
+        self.assertEqual(set(validar_campos("", "", "")), {"nome", "descricao"})
+        self.assertEqual(set(validar_campos("Ana", "c" * 81, "x")), {"contato"})
+
+    # ---------------- lixeira ----------------
+    def test_excluir_move_para_a_lixeira(self):
+        a = self.db.inserir("Ana", "1", "x")
+        b = self.db.inserir("Bia", "2", "y")
+        self.assertTrue(self.db.excluir(a))
+        self.assertEqual([r[0] for r in self.db.listar()], [b])
+        self.assertEqual(self.db.listar("ana"), [])             # busca ignora a lixeira
+        self.assertEqual(self.db.contar_hoje(), 1)
+        self.assertEqual(sum(self.db.contar_por_status().values()), 1)
+        self.assertEqual(self.db.contar_lixeira(), 1)
+        self.assertEqual(self.db.listar_lixeira()[0][0], a)
+        self.assertIsNotNone(self.db.obter_detalhado(a, incluir_excluidos=True)["excluido_em"])
+
+    def test_restaurar(self):
+        ids = [self.db.inserir(f"P{i}", "", "x") for i in range(3)]
+        self.db.excluir_varios(ids)
+        self.assertEqual(self.db.restaurar(ids[:2]), 2)
+        self.assertEqual(len(self.db.listar()), 2)
+        self.assertEqual(self.db.contar_lixeira(), 1)
+        self.assertEqual(self.db.restaurar(ids[:2]), 0)         # já restaurados
+        self.assertEqual(self.db.restaurar([]), 0)
+
+    def test_apagar_definitivamente_so_age_na_lixeira(self):
+        a = self.db.inserir("Ana", "", "x")
+        b = self.db.inserir("Bia", "", "y")
+        self.assertEqual(self.db.apagar_definitivamente([a]), 0)   # ativo: protegido
+        self.assertIsNotNone(self.db.obter(a))
+        self.db.excluir(b)
+        self.assertEqual(self.db.apagar_definitivamente([a, b]), 1)
+        self.assertIsNone(self.db.obter_detalhado(b, incluir_excluidos=True))
+        self.assertIsNotNone(self.db.obter(a))
+
+    def test_esvaziar_lixeira(self):
+        a = self.db.inserir("Ana", "", "x")
+        self.db.inserir("Bia", "", "y")
+        self.db.excluir(a)
+        self.assertEqual(self.db.esvaziar_lixeira(), 1)
+        self.assertEqual(self.db.contar_lixeira(), 0)
+        self.assertEqual(len(self.db.listar()), 1)
+
+    def test_limpeza_automatica_da_lixeira(self):
+        velho = self.db.inserir("Velho", "", "x")
+        novo = self.db.inserir("Novo", "", "y")
+        self.db.excluir_varios([velho, novo])
+        antigo = (datetime.now() - timedelta(days=45)).strftime("%Y-%m-%d %H:%M:%S")
+        conn = sqlite3.connect(self.db.caminho)
+        conn.execute("UPDATE solicitacoes SET excluido_em = ? WHERE id = ?", (antigo, velho))
+        conn.commit(); conn.close()
+        self.assertEqual(self.db.limpar_lixeira_antiga(30), 1)
+        self.assertEqual([r[0] for r in self.db.listar_lixeira()], [novo])
+
+    def test_status_nao_muda_na_lixeira(self):
+        rid = self.db.inserir("Ana", "", "x")
+        self.db.excluir(rid)
+        self.db.atualizar_status(rid, STATUS_ATENDIDA)
+        self.assertEqual(self.db.obter_detalhado(rid, True)["status"], STATUS_PENDENTE)
+
+    # ---------------- migração ----------------
+    def test_migracao_de_banco_antigo(self):
+        antigo = os.path.join(self.tmp.name, "antigo.db")
+        conn = sqlite3.connect(antigo)
+        conn.executescript("""
+            CREATE TABLE solicitacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, data_hora TEXT NOT NULL,
+                nome_paciente TEXT NOT NULL, contato TEXT, descricao TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Pendente'
+                CHECK (status IN ('Pendente', 'Atendida')));
+            INSERT INTO solicitacoes (data_hora, nome_paciente, contato, descricao, status)
+            VALUES ('2026-01-05 10:00:00', 'Maria Antiga', '123', 'registro da v1', 'Atendida');
+        """)
+        conn.commit(); conn.close()
+        db = Database(antigo)
+        regs = db.listar()
+        self.assertEqual(len(regs), 1)                          # dado antigo preservado
+        self.assertEqual((regs[0][2], regs[0][5]), ("Maria Antiga", STATUS_ATENDIDA))
+        self.assertTrue(db.excluir(regs[0][0]))                 # funções novas funcionam
+        self.assertEqual(db.contar_lixeira(), 1)
+        Database(antigo)                                        # reabrir não quebra
+
+    # ---------------- backup ----------------
+    def test_fazer_backup_e_listar(self):
+        self.db.inserir("Ana", "", "x")
+        self.db.inserir("Bia", "", "y")
+        caminho = self.db.fazer_backup("backup_teste.db")
+        self.assertTrue(os.path.isfile(caminho))
+        self.assertFalse(os.path.exists(caminho + ".tmp"))
+        itens = self.db.listar_backups()
+        self.assertEqual(len(itens), 1)
+        self.assertEqual((itens[0]["nome"], itens[0]["registros"]), ("backup_teste.db", 2))
+        self.assertGreater(itens[0]["tamanho"], 0)
+
+    def test_backup_automatico_um_por_dia(self):
+        self.db.inserir("Ana", "", "x")
+        primeiro = self.db.backup_automatico()
+        self.assertIsNotNone(primeiro)
+        self.assertIsNone(self.db.backup_automatico())           # já existe o de hoje
+        self.db.inserir("Bia", "", "y")
+        self.assertIsNotNone(self.db.backup_automatico(sobrescrever=True))
+        self.assertEqual(self.db.listar_backups()[0]["registros"], 2)
+
+    def test_backup_nao_troca_copia_com_dados_por_banco_vazio(self):
+        rid = self.db.inserir("Ana", "", "x")
+        self.db.backup_automatico()
+        self.db.excluir(rid)
+        self.db.esvaziar_lixeira()                               # banco ficou vazio
+        self.assertIsNone(self.db.backup_automatico(sobrescrever=True))
+        self.assertEqual(self.db.listar_backups()[0]["registros"], 1)
+
+    def test_rotacao_de_backups(self):
+        self.db.inserir("Ana", "", "x")
+        pasta = self.db.pasta_backups()
+        for i in range(BACKUPS_MANTER + 4):
+            caminho = self.db.fazer_backup(f"backup_2026-01-{i + 1:02d}.db")
+            os.utime(caminho, (1_700_000_000 + i * 86400,) * 2)  # datas crescentes
+        nomes = sorted(n for n in os.listdir(pasta) if n.startswith("backup_"))
+        self.assertEqual(len(nomes), BACKUPS_MANTER)
+        self.assertNotIn("backup_2026-01-01.db", nomes)          # os mais antigos saíram
+
+    def test_restaurar_backup(self):
+        a = self.db.inserir("Ana", "", "original")
+        caminho = self.db.fazer_backup("backup_bom.db")
+        self.db.excluir(a)
+        self.db.esvaziar_lixeira()
+        self.db.inserir("Intruso", "", "criado depois do backup")
+        seguranca = self.db.restaurar_backup(caminho)
+        nomes = [r[2] for r in self.db.listar()]
+        self.assertEqual(nomes, ["Ana"])                         # voltou ao estado do backup
+        self.assertTrue(os.path.isfile(seguranca))               # cópia do estado anterior
+        self.assertEqual(self.db._contar_em(seguranca), 1)       # ...com o "Intruso"
+
+    def test_restaurar_backup_invalido_nao_altera_nada(self):
+        self.db.inserir("Ana", "", "x")
+        lixo = os.path.join(self.tmp.name, "lixo.db")
+        with open(lixo, "wb") as arq:
+            arq.write(b"isto nao e um banco de dados" * 50)
+        with self.assertRaises(ValueError):
+            self.db.restaurar_backup(lixo)
+        outro = os.path.join(self.tmp.name, "outro.db")
+        conn = sqlite3.connect(outro); conn.execute("CREATE TABLE coisa (x)"); conn.commit(); conn.close()
+        with self.assertRaises(ValueError):
+            self.db.restaurar_backup(outro)
+        with self.assertRaises(ValueError):
+            self.db.restaurar_backup(os.path.join(self.tmp.name, "naoexiste.db"))
+        self.assertEqual(len(self.db.listar()), 1)
+        self.assertEqual(self.db.listar_backups(), [])           # nem criou cópia de segurança
+
+    def test_restaurar_backup_de_versao_antiga(self):
+        antigo = os.path.join(self.tmp.name, "backup_v1.db")
+        conn = sqlite3.connect(antigo)
+        conn.executescript("""
+            CREATE TABLE solicitacoes (id INTEGER PRIMARY KEY AUTOINCREMENT, data_hora TEXT NOT NULL,
+              nome_paciente TEXT NOT NULL, contato TEXT, descricao TEXT NOT NULL,
+              status TEXT NOT NULL DEFAULT 'Pendente');
+            INSERT INTO solicitacoes (data_hora, nome_paciente, contato, descricao)
+            VALUES ('2026-01-05 10:00:00', 'Da v1', '', 'x');
+        """)
+        conn.commit(); conn.close()
+        self.db.restaurar_backup(antigo)
+        self.assertEqual([r[2] for r in self.db.listar()], ["Da v1"])
+        self.assertTrue(self.db.excluir(self.db.listar()[0][0]))  # colunas novas recriadas
 
 
 if __name__ == "__main__":
