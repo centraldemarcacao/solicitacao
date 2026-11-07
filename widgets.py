@@ -322,7 +322,18 @@ class TabelaRegistros(ctk.CTkFrame):
     def mostrar_vazio(self, titulo: str, texto: str) -> None:
         self._vazio_titulo.configure(text=titulo)
         self._vazio_texto.configure(text=texto)
-        self.vazio.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Garante que a tabela calculou o tamanho antes de posicionar o aviso
+        self.update_idletasks()
+        
+        # Posiciona centralizado considerando a área abaixo do cabeçalho
+        self.vazio.place(
+            relx=0.5, 
+            rely=0.5, 
+            relwidth=1.0, 
+            relheight=1.0, 
+            anchor="center"
+        )
         self.vazio.lift()
 
     def esconder_vazio(self) -> None:
