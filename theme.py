@@ -14,7 +14,7 @@ mínimo de 4,5:1 (leitura rápida em plantões).
 # --- Marca ------------------------------------------------------------
 NOME_INSTITUICAO = "Liga Contra o Câncer"
 SUBTITULO = "Solicitações de pacientes"
-VERSAO = "2.2"
+VERSAO = "2.3"
 
 # --- Barra lateral (azul-marinho) -------------------------------------
 NAVY = "#0B2A43"

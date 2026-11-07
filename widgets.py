@@ -84,10 +84,10 @@ class ItemNavegacao(ctk.CTkFrame):
         self._faixa = ctk.CTkFrame(self, width=4, fg_color="transparent", corner_radius=2)
         self._faixa.pack(side="left", fill="y", pady=4)
         self._botao = ctk.CTkButton(
-            self, text=texto, image=icone(nome_icone, T.NAV_TEXTO, 22),
-            compound="left", anchor="w", height=48, corner_radius=10,
-            border_spacing=14, fg_color="transparent", hover_color=T.NAVY_HOVER,
-            text_color=T.NAV_TEXTO, font=fonte(15, "bold"), command=comando,
+            self, text=texto, image=icone(nome_icone, T.NAV_TEXTO, 20),
+            compound="left", anchor="w", height=42, corner_radius=10,
+            border_spacing=12, fg_color="transparent", hover_color=T.NAVY_HOVER,
+            text_color=T.NAV_TEXTO, font=fonte(14, "bold"), command=comando,
         )
         self._botao.pack(side="left", fill="x", expand=True, padx=(10, 14))
 
@@ -234,6 +234,8 @@ class TabelaRegistros(ctk.CTkFrame):
         self._tag_base = {}
         self._sel_aplicada = set()
         self._estilizar(px)
+        self._cabecalho_px = px(44)     # altura aproximada da linha de títulos
+        self._altura_icone = px(250)    # altura mínima para mostrar o ícone grande
 
         self.tree = ttk.Treeview(
             self, columns=tuple(c[0] for c in colunas), show="headings",
@@ -253,16 +255,24 @@ class TabelaRegistros(ctk.CTkFrame):
         barra.pack(side="right", fill="y", pady=1, padx=(0, 1))
 
         # Estado vazio (sobreposto à tabela)
+        # Cobre só o corpo da tabela (nunca a linha de títulos) e, em janelas
+        # baixas, esconde o ícone para o texto não ser cortado.
         self.vazio = ctk.CTkFrame(self, fg_color=T.BRANCO, corner_radius=0)
-        ctk.CTkLabel(self.vazio, text="", image=icone("clipboard", T.BORDA_FORTE, 64)).pack()
+        miolo = ctk.CTkFrame(self.vazio, fg_color="transparent")
+        miolo.place(relx=0.5, rely=0.42, anchor="center")
+        self._icone_vazio = ctk.CTkLabel(
+            miolo, text="", image=icone("clipboard", T.BORDA_FORTE, 64))
+        self._icone_vazio.pack()
         self._vazio_titulo = ctk.CTkLabel(
-            self.vazio, text="", font=fonte(17, "bold"), text_color=T.TEXTO,
+            miolo, text="", font=fonte(17, "bold"), text_color=T.TEXTO,
         )
         self._vazio_titulo.pack(pady=(8, 0))
         self._vazio_texto = ctk.CTkLabel(
-            self.vazio, text="", font=fonte(13), text_color=T.TEXTO_SUAVE,
+            miolo, text="", font=fonte(13), text_color=T.TEXTO_SUAVE,
         )
         self._vazio_texto.pack()
+        self._icone_visivel = True
+        self.bind("<Configure>", self._ajustar_vazio)
 
         self.tree.bind("<<TreeviewSelect>>", self._selecionou)
         self.tree.bind("<Double-1>", self._duplo_clique)
@@ -322,8 +332,19 @@ class TabelaRegistros(ctk.CTkFrame):
     def mostrar_vazio(self, titulo: str, texto: str) -> None:
         self._vazio_titulo.configure(text=titulo)
         self._vazio_texto.configure(text=texto)
-        self.vazio.place(relx=0.5, rely=0.5, anchor="center")
+        self.vazio.place(x=1, y=self._cabecalho_px, relwidth=1, relheight=1)
         self.vazio.lift()
+
+    def _ajustar_vazio(self, evento=None) -> None:
+        """Mostra o ícone grande só quando o corpo da tabela é alto o bastante."""
+        altura = getattr(evento, "height", 0) or self.winfo_height()
+        cabe = altura - self._cabecalho_px >= self._altura_icone
+        if cabe != self._icone_visivel:
+            self._icone_visivel = cabe
+            if cabe:
+                self._icone_vazio.pack(before=self._vazio_titulo)
+            else:
+                self._icone_vazio.pack_forget()
 
     def esconder_vazio(self) -> None:
         self.vazio.place_forget()

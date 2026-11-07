@@ -192,7 +192,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
         # --- Marca ---------------------------------------------------
         marca = ctk.CTkFrame(barra, fg_color="transparent")
-        marca.pack(fill="x", padx=22, pady=(30, 6))
+        marca.pack(fill="x", padx=22, pady=(22, 4))
         self._montar_logo(marca)
         textos = ctk.CTkFrame(marca, fg_color="transparent")
         textos.pack(side="left", padx=(12, 0))
@@ -206,7 +206,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         ).pack(anchor="w")
 
         ctk.CTkFrame(barra, height=1, fg_color=T.NAV_LINHA, corner_radius=0).pack(
-            fill="x", padx=22, pady=(20, 18)
+            fill="x", padx=22, pady=(14, 12)
         )
 
         # --- Menu ----------------------------------------------------
@@ -224,33 +224,55 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         ):
             item = ItemNavegacao(barra, texto, nome_icone,
                                  lambda c=chave: self.mostrar_pagina(c))
-            item.pack(fill="x", padx=(8, 0), pady=3)
+            item.pack(fill="x", padx=(8, 0), pady=2)
             self.nav[chave] = item
 
         # --- Rodapé (empilhado de baixo para cima) -------------------
-        ctk.CTkLabel(
-            barra, text=f"Dados salvos apenas neste computador  •  v{T.VERSAO}",
+        # Em janelas baixas, o relógio e o botão somem primeiro: o menu
+        # (inclusive "Backup") nunca fica escondido.
+        self._rodape_versao = ctk.CTkLabel(
+            barra, text=f"Dados salvos neste computador  •  v{T.VERSAO}",
             font=fonte(11), text_color=T.NAV_SUAVE, wraplength=220, anchor="w",
-        ).pack(side="bottom", anchor="w", padx=24, pady=(0, 20))
-
-        ctk.CTkButton(
-            barra, text="Verificar atualizações", height=32, font=fonte(12, "bold"),
+        )
+        self._rodape_botao = ctk.CTkButton(
+            barra, text="Verificar atualizações", height=30, font=fonte(12, "bold"),
             fg_color="transparent", text_color=T.NAV_TEXTO, border_width=1,
             border_color=T.NAV_LINHA, hover_color=T.NAVY_HOVER,
             command=self.verificar_atualizacao_manual,
-        ).pack(side="bottom", fill="x", padx=22, pady=(0, 12))
-
-        relogio = ctk.CTkFrame(barra, fg_color=T.NAVY_HOVER, corner_radius=14)
-        relogio.pack(side="bottom", fill="x", padx=22, pady=(0, 14))
+        )
+        self._rodape_relogio = ctk.CTkFrame(barra, fg_color=T.NAVY_HOVER, corner_radius=14)
         self.lbl_hora = ctk.CTkLabel(
-            relogio, text="--:--", font=fonte(30, "bold"),
+            self._rodape_relogio, text="--:--", font=fonte(26, "bold"),
             text_color=T.BRANCO, anchor="w",
         )
-        self.lbl_hora.pack(anchor="w", padx=18, pady=(12, 0))
+        self.lbl_hora.pack(anchor="w", padx=18, pady=(8, 0))
         self.lbl_data = ctk.CTkLabel(
-            relogio, text="", font=fonte(13), text_color=T.NAV_SUAVE, anchor="w",
+            self._rodape_relogio, text="", font=fonte(12), text_color=T.NAV_SUAVE, anchor="w",
         )
-        self.lbl_data.pack(anchor="w", padx=18, pady=(0, 12))
+        self.lbl_data.pack(anchor="w", padx=18, pady=(0, 8))
+        self._barra_lateral = barra
+        self._rodape_nivel = None
+        self._ajustar_rodape(None)
+        barra.bind("<Configure>", self._ajustar_rodape)
+
+    def _ajustar_rodape(self, evento) -> None:
+        """Decide o que cabe no rodapé conforme a altura disponível."""
+        altura = getattr(evento, "height", 0) if evento is not None else 0
+        if altura:
+            logico = altura / (self._dpi * self._fator_escala)
+            nivel = 2 if logico >= 640 else 1 if logico >= 560 else 0
+        else:
+            nivel = 2
+        if nivel == self._rodape_nivel:
+            return
+        self._rodape_nivel = nivel
+        for item in (self._rodape_versao, self._rodape_botao, self._rodape_relogio):
+            item.pack_forget()
+        self._rodape_versao.pack(side="bottom", anchor="w", padx=24, pady=(0, 14))
+        if nivel >= 1:
+            self._rodape_botao.pack(side="bottom", fill="x", padx=22, pady=(0, 10))
+        if nivel >= 2:
+            self._rodape_relogio.pack(side="bottom", fill="x", padx=22, pady=(0, 12))
 
     def _montar_logo(self, pai) -> None:
         """Usa logo.png (se existir) sobre placa branca; senão, a marca própria."""
