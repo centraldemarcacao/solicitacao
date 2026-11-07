@@ -49,6 +49,10 @@ from widgets import (
 PAG_NOVO = "novo"
 PAG_HIST = "historico"
 
+# Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
+LARGURA_BASE, ALTURA_BASE = 1240, 780
+MINIMO_LARGURA, MINIMO_ALTURA = 1080, 700
+
 FILTROS_STATUS = {
     "Todos": None,
     "Pendentes": STATUS_PENDENTE,
@@ -122,9 +126,14 @@ class App(ctk.CTk):
         ctk.set_default_color_theme("blue")
         super().__init__()
 
+        # Em telas pequenas (ou com escala 125%/150% do Windows) reduz a
+        # interface inteira, para que nada fique cortado ao maximizar.
+        self._dpi = self._detectar_dpi()
+        self._fator_escala = self._ajustar_escala_a_tela()
+
         self.title(f"{T.NOME_INSTITUICAO} — Solicitações de pacientes")
-        self.geometry("1240x780")
-        self.minsize(1080, 700)
+        self.geometry(f"{LARGURA_BASE}x{ALTURA_BASE}")
+        self.minsize(MINIMO_LARGURA, MINIMO_ALTURA)
         self.configure(fg_color=T.FUNDO)
 
         icone_janela = localizar_arquivo("icone.ico")
@@ -137,6 +146,8 @@ class App(ctk.CTk):
         self._com_erro = set()      # campos do formulário com erro
         self._rotulos_erro = {}     # campo -> rótulo da mensagem de erro
         self._total_exibido = 0
+        self._status_linha = {}     # id da linha -> status (para recolorir)
+        self._sel_aplicada = set()  # linhas que já estão com a cor de seleção
 
         try:
             self.db = Database()
@@ -162,6 +173,34 @@ class App(ctk.CTk):
         self.mostrar_pagina(PAG_NOVO)
         self.atualizar_tudo()
         self._atualizar_relogio()
+
+    # ==================================================================
+    # Escala e tamanho da janela
+    # ==================================================================
+    def _detectar_dpi(self) -> float:
+        """Escala do Windows (1.0 = 100%, 1.25 = 125%, 1.5 = 150%...)."""
+        try:
+            return float(self._get_window_scaling())
+        except Exception:
+            return max(1.0, self.winfo_fpixels("1i") / 96.0)
+
+    def _ajustar_escala_a_tela(self) -> float:
+        """Reduz toda a interface (textos incluídos, de forma proporcional)
+        quando o tamanho de projeto não cabe na tela. Retorna o fator usado."""
+        largura = self.winfo_screenwidth() / self._dpi
+        altura = (self.winfo_screenheight() - 90) / self._dpi  # barra de tarefas + título
+        fator = min(1.0, largura / (LARGURA_BASE + 40), altura / ALTURA_BASE)
+        fator = max(0.7, round(fator, 2))
+        if fator < 0.99:
+            ctk.set_widget_scaling(fator)
+            ctk.set_window_scaling(fator)
+            return fator
+        return 1.0
+
+    def _px(self, logico: float) -> int:
+        """Converte um tamanho lógico em pixels reais (para widgets ttk, que o
+        CustomTkinter não escala sozinho)."""
+        return max(1, round(logico * self._dpi * self._fator_escala))
 
     # ==================================================================
     # Barra lateral
@@ -361,19 +400,21 @@ class App(ctk.CTk):
         )
         self.lbl_contador.pack(side="right")
 
+        # Botões e erro da descrição ficam presos à base do cartão: em janelas
+        # baixas, quem encolhe é a caixa de texto (e nada some).
+        botoes = ctk.CTkFrame(f, fg_color="transparent")
+        botoes.pack(side="bottom", fill="x", pady=(6, 0))
+        self.err_desc = self._rotulo_erro(f, lado="bottom")
+
         self.txt_desc = ctk.CTkTextbox(
-            f, height=150, font=fonte(15), wrap="word",
+            f, height=110, font=fonte(15), wrap="word",
             border_width=2, border_color=T.BORDA, corner_radius=10,
             fg_color=T.BRANCO, text_color=T.TEXTO,
         )
         self.txt_desc.pack(fill="both", expand=True, pady=(6, 0))
-        self.err_desc = self._rotulo_erro(f)
         self._registrar_campo(self.txt_desc, self.err_desc)
         self.txt_desc.bind("<KeyRelease>", lambda _e: self._atualizar_contador())
 
-        # Botões
-        botoes = ctk.CTkFrame(f, fg_color="transparent")
-        botoes.pack(fill="x", pady=(6, 0))
         ctk.CTkButton(
             botoes, text="Salvar registro", height=48, width=200, corner_radius=10,
             image=icone("check", T.BRANCO, 20), compound="left",
@@ -412,13 +453,13 @@ class App(ctk.CTk):
         )
 
     @staticmethod
-    def _rotulo_erro(pai) -> ctk.CTkLabel:
+    def _rotulo_erro(pai, lado: str = "top") -> ctk.CTkLabel:
         """Mensagem de erro com altura reservada (o layout não 'pula')."""
         rotulo = ctk.CTkLabel(
             pai, text="", height=22, font=fonte(12, "bold"),
             text_color=T.VERMELHO, anchor="w",
         )
-        rotulo.pack(fill="x", pady=(2, 6))
+        rotulo.pack(side=lado, fill="x", pady=(2, 6))
         return rotulo
 
     # --- Foco, erros e contador ---------------------------------------
@@ -673,10 +714,9 @@ class App(ctk.CTk):
             command=self.excluir_selecionados,
         ).pack(side="right")
 
-        self._montar_tabela(card)
-
+        # Rodapé preso à base do cartão: em janelas baixas, quem encolhe é a tabela.
         rodape = ctk.CTkFrame(card, fg_color="transparent")
-        rodape.pack(fill="x", padx=24, pady=(0, 16))
+        rodape.pack(side="bottom", fill="x", padx=24, pady=(0, 16))
         self.lbl_contagem = ctk.CTkLabel(
             rodape, text="", font=fonte(12, "bold"),
             text_color=T.TEXTO_SUAVE, anchor="w",
@@ -687,6 +727,8 @@ class App(ctk.CTk):
             text="Duplo clique: ver detalhes   •   Delete: excluir   •   Clique direito: mais opções",
             font=fonte(12), text_color=T.TEXTO_SUAVE, anchor="e",
         ).pack(side="right")
+
+        self._montar_tabela(card)
         return pagina
 
     def _montar_tabela(self, card) -> None:
@@ -696,16 +738,18 @@ class App(ctk.CTk):
 
         estilo = ttk.Style(self)
         estilo.theme_use("clam")
-        fator = max(1.0, self.winfo_fpixels("1i") / 96.0)  # escala do Windows (125%, 150%...)
+        # Widgets ttk não seguem a escala do CustomTkinter: usamos pixels reais
+        # (tamanho negativo = pixels), proporcionais à escala da interface.
         estilo.configure(
             "Hosp.Treeview", background=T.BRANCO, fieldbackground=T.BRANCO,
-            foreground=T.TEXTO, rowheight=int(42 * fator), font=(T.FONTE, 11),
-            borderwidth=0,
+            foreground=T.TEXTO, rowheight=self._px(40),
+            font=(T.FONTE, -self._px(14)), borderwidth=0,
         )
         estilo.layout("Hosp.Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
         estilo.configure(
             "Hosp.Treeview.Heading", background=T.NAVY, foreground=T.BRANCO,
-            font=(T.FONTE, 11, "bold"), relief="flat", padding=(10, 10),
+            font=(T.FONTE, -self._px(14), "bold"), relief="flat",
+            padding=(self._px(10), self._px(9)),
         )
         estilo.map("Hosp.Treeview.Heading", background=[("active", T.NAVY_ATIVO)])
         # Corrige o Tk 8.6.9 (Python 3.9), onde as cores de 'tag' ignoravam a seleção
@@ -713,10 +757,11 @@ class App(ctk.CTk):
             e for e in estilo.map("Hosp.Treeview", query_opt="background")
             if e[:2] != ("!disabled", "!selected")
         ]
+        # Seleção suave, com o texto escuro mantido (leitura fácil, nada chamativo).
         estilo.map(
             "Hosp.Treeview",
-            background=[("selected", T.TEAL)] + sem_tags,
-            foreground=[("selected", T.BRANCO)],
+            background=[("selected", T.SELECAO)] + sem_tags,
+            foreground=[("selected", T.TEXTO)],
         )
         estilo.configure(
             "Hosp.Vertical.TScrollbar", background=T.BORDA_FORTE, troughcolor=T.FUNDO,
@@ -739,8 +784,12 @@ class App(ctk.CTk):
             self.tabela.heading(coluna, text=titulo, anchor="w")
             self.tabela.column(coluna, width=largura, minwidth=90, anchor="w",
                                stretch=(coluna == "descricao"))
-        self.tabela.tag_configure("pendente", background=T.AMBAR_CLARO)
-        self.tabela.tag_configure("atendida", background=T.VERDE_CLARO)
+        # Cada linha tem UMA só etiqueta (status ou "selecionada"). Assim a cor
+        # não depende de como cada versão do Tk resolve conflitos entre a cor
+        # da etiqueta e a cor de seleção do estilo.
+        self.tabela.tag_configure("pendente", background=T.AMBAR_CLARO, foreground=T.TEXTO)
+        self.tabela.tag_configure("atendida", background=T.VERDE_CLARO, foreground=T.TEXTO)
+        self.tabela.tag_configure("selecionada", background=T.SELECAO, foreground=T.TEXTO)
 
         barra = ttk.Scrollbar(corpo, orient="vertical", style="Hosp.Vertical.TScrollbar",
                               command=self.tabela.yview)
@@ -761,7 +810,7 @@ class App(ctk.CTk):
         self.lbl_vazio_texto.pack()
 
         # Interações
-        self.tabela.bind("<<TreeviewSelect>>", lambda _e: self._atualizar_rodape())
+        self.tabela.bind("<<TreeviewSelect>>", self._ao_selecionar)
         self.tabela.bind("<Double-1>", self._duplo_clique)
         self.tabela.bind("<Return>", lambda _e: self.ver_detalhes())
         self.tabela.bind("<Delete>", lambda _e: self.excluir_selecionados())
@@ -793,10 +842,12 @@ class App(ctk.CTk):
         status = FILTROS_STATUS.get(self.filtro_status.get())
         registros = self.db.listar(filtro, status)
 
+        self._status_linha = {}
+        self._sel_aplicada = set()  # linhas recém-inseridas começam sem seleção
         for rid, data_hora, nome, contato, descricao, st in registros:
+            self._status_linha[str(rid)] = st
             self.tabela.insert(
-                "", "end", iid=str(rid),
-                tags=("atendida" if st == STATUS_ATENDIDA else "pendente",),
+                "", "end", iid=str(rid), tags=(self._tag_status(st),),
                 values=(formatar_data(data_hora), nome, contato,
                         " ".join(descricao.split()), st),
             )
@@ -804,6 +855,7 @@ class App(ctk.CTk):
         manter = [i for i in selecao_anterior if self.tabela.exists(i)]
         if manter:
             self.tabela.selection_set(manter)
+        self._sincronizar_selecao()
 
         self._total_exibido = len(registros)
         if registros:
@@ -826,6 +878,25 @@ class App(ctk.CTk):
         self.cartao_pend.definir(pend)
         self.cartao_aten.definir(aten)
         self._atualizar_rodape()
+
+    @staticmethod
+    def _tag_status(status: str) -> str:
+        return "atendida" if status == STATUS_ATENDIDA else "pendente"
+
+    def _ao_selecionar(self, _evento=None) -> None:
+        self._sincronizar_selecao()
+        self._atualizar_rodape()
+
+    def _sincronizar_selecao(self) -> None:
+        """Pinta de 'selecionada' as linhas escolhidas e devolve às demais a cor do status."""
+        atual = set(self.tabela.selection())
+        for iid in atual ^ self._sel_aplicada:
+            if not self.tabela.exists(iid):
+                continue
+            tag = ("selecionada" if iid in atual
+                   else self._tag_status(self._status_linha.get(iid, STATUS_PENDENTE)))
+            self.tabela.item(iid, tags=(tag,))
+        self._sel_aplicada = atual
 
     def _atualizar_rodape(self) -> None:
         texto = plural(self._total_exibido, "registro exibido", "registros exibidos")

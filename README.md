@@ -101,7 +101,10 @@ O botão **Abrir pasta dos dados**, na barra lateral, mostra onde ficou.
     também é possível alterar o status.
   * **Excluir:** botão, tecla `Delete` ou clique direito. O programa pede
     confirmação, pois a exclusão é definitiva.
-* Linhas âmbar claro = Pendente; verde claro = Atendida.
+* Linhas âmbar claro = Pendente; verde claro = Atendida; azul-acinzentado
+  suave = linha selecionada.
+* **Telas pequenas ou com escala 125%/150%:** o programa reduz a interface
+  automaticamente para caber na tela, sem cortar textos ou botões.
 
 ## 6. Personalizar a identidade visual
 
@@ -132,4 +135,5 @@ Dados de pacientes são **dados pessoais sensíveis**. Antes de usar em produç�
 | Aviso de erro inesperado | Veja o arquivo `erros.log` na pasta `dados` |
 | Antivírus ou SmartScreen bloqueia | Falso positivo comum com `--onefile`; solicite liberação à TI ou gere com `--onedir` |
 | "Python não encontrado" ao rodar o `build.bat` | Instale o Python marcando "Add Python to PATH" (apenas no computador de build) |
+| Textos pequenos demais | Em telas pequenas a interface é reduzida de propósito; use uma tela maior ou diminua a escala do Windows (Configurações > Sistema > Vídeo) |
 | Logotipo não aparece | Confirme o nome `logo.png` e gere o `.exe` novamente |

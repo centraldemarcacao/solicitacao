@@ -47,6 +47,7 @@ VERMELHO_CLARO = "#FDECEA"
 # --- Neutros ----------------------------------------------------------
 FUNDO = "#EEF4F8"
 CARD = "#FFFFFF"
+SELECAO = "#D5E4F0"          # linha selecionada na tabela (azul-acinzentado suave)
 BORDA = "#D3DEE6"
 BORDA_FORTE = "#B6C5D1"
 TEXTO = "#13293D"
