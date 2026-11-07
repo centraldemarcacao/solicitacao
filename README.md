@@ -26,7 +26,7 @@ anterior fica ao lado como `AnotacoesHospitalares.exe.anterior`.
 
 Configuração única:
 
-1. (Já feito) Em `theme.py`, está configurado `REPOSITORIO_GITHUB = "centraldemarcacao/informacao"`
+1. (Já feito) Em `theme.py`, está configurado `REPOSITORIO_GITHUB = "centraldemarcacao/solicitacao"`
    (o repositório precisa ser **público**; não coloque dados de pacientes nele).
 2. Para lançar uma versão nova, envie o código e crie a tag, por exemplo:
    `git tag v2.2 && git push origin v2.2`. O GitHub Actions gera o `.exe`,

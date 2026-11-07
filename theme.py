@@ -61,4 +61,4 @@ FONTE = "Segoe UI"
 # --- Atualização automática -------------------------------------------
 # Repositório do GitHub onde as versões são publicadas, no formato
 # "usuario/repositorio". Deixe vazio para desativar a atualização automática.
-REPOSITORIO_GITHUB = "centraldemarcacao/informacao"
+REPOSITORIO_GITHUB = "centraldemarcacao/solicitacao"
