@@ -14,7 +14,7 @@ mínimo de 4,5:1 (leitura rápida em plantões).
 # --- Marca ------------------------------------------------------------
 NOME_INSTITUICAO = "Liga Contra o Câncer"
 SUBTITULO = "Solicitações de pacientes"
-VERSAO = "2.1"
+VERSAO = "2.2"
 
 # --- Barra lateral (azul-marinho) -------------------------------------
 NAVY = "#0B2A43"
@@ -57,3 +57,8 @@ BRANCO = "#FFFFFF"
 
 # --- Tipografia -------------------------------------------------------
 FONTE = "Segoe UI"
+
+# --- Atualização automática -------------------------------------------
+# Repositório do GitHub onde as versões são publicadas, no formato
+# "usuario/repositorio". Deixe vazio para desativar a atualização automática.
+REPOSITORIO_GITHUB = ""

@@ -32,6 +32,7 @@ from database import (
     Database,
     validar_campos,
 )
+from atualizacao import AtualizacaoMixin
 from icons import icone
 from paginas import PaginasExtrasMixin
 from util import cores_status, data_curta, formatar_data, plural, resumir
@@ -88,7 +89,7 @@ def localizar_arquivo(nome: str):
 # ======================================================================
 # Janela principal
 # ======================================================================
-class App(PaginasExtrasMixin, ctk.CTk):
+class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -151,6 +152,7 @@ class App(PaginasExtrasMixin, ctk.CTk):
         self._atualizar_relogio()
         if aviso_inicial:
             self.toast.mostrar(aviso_inicial, "erro", 8000)
+        self._iniciar_atualizacao()
 
     # ==================================================================
     # Escala e tamanho da janela
@@ -230,6 +232,13 @@ class App(PaginasExtrasMixin, ctk.CTk):
             barra, text=f"Dados salvos apenas neste computador  •  v{T.VERSAO}",
             font=fonte(11), text_color=T.NAV_SUAVE, wraplength=220, anchor="w",
         ).pack(side="bottom", anchor="w", padx=24, pady=(0, 20))
+
+        ctk.CTkButton(
+            barra, text="Verificar atualizações", height=32, font=fonte(12, "bold"),
+            fg_color="transparent", text_color=T.NAV_TEXTO, border_width=1,
+            border_color=T.NAV_LINHA, hover_color=T.NAVY_HOVER,
+            command=self.verificar_atualizacao_manual,
+        ).pack(side="bottom", fill="x", padx=22, pady=(0, 12))
 
         relogio = ctk.CTkFrame(barra, fg_color=T.NAVY_HOVER, corner_radius=14)
         relogio.pack(side="bottom", fill="x", padx=22, pady=(0, 14))

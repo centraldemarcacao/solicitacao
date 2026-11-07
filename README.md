@@ -16,6 +16,28 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Atualização automática (versão 2.2)
+
+O programa confere, ao abrir, se há versão nova no GitHub e oferece
+**"Atualizar agora"**: baixa o novo `.exe`, confere a assinatura SHA-256, faz
+backup, troca o arquivo e reabre sozinho. Os dados não são alterados. O botão
+**Verificar atualizações** (menu lateral) faz a checagem na hora. A versão
+anterior fica ao lado como `AnotacoesHospitalares.exe.anterior`.
+
+Configuração única:
+
+1. Em `theme.py`, preencha `REPOSITORIO_GITHUB = "seu-usuario/seu-repositorio"`
+   (o repositório precisa ser **público**; não coloque dados de pacientes nele).
+2. Para lançar uma versão nova, envie o código e crie a tag, por exemplo:
+   `git tag v2.2 && git push origin v2.2`. O GitHub Actions gera o `.exe`,
+   ajusta o número da versão e publica em **Releases**.
+3. Os programas já instalados passam a receber a atualização sozinhos.
+
+A primeira instalação com este recurso ainda precisa ser feita manualmente.
+Se a rede da instituição bloquear o GitHub, a checagem falha em silêncio e o
+programa funciona normalmente. O .exe deve ficar em pasta com permissão de
+gravação (Documentos, Área de Trabalho).
+
 ## Estrutura de arquivos
 
 ```
@@ -23,6 +45,9 @@ anotacoes_hospitalares/
 ├── main.py            # Ponto de entrada
 ├── gui.py             # Janela principal: barra lateral, formulário e histórico
 ├── paginas.py         # Telas de edição, Lixeira e Backup
+├── updater.py         # Atualização: consulta, download, SHA-256 e troca do .exe
+├── atualizacao.py     # Telas/fluxo da atualização
+├── test_updater.py    # Testes da atualização
 ├── util.py            # Funções de texto/data
 ├── widgets.py         # Componentes visuais (menu, cartões, busca, avisos, diálogos)
 ├── icons.py           # Ícones e logotipo desenhados com Pillow
