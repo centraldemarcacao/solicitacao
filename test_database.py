@@ -332,5 +332,86 @@ class TestDatabase(unittest.TestCase):
         self.assertTrue(self.db.excluir(self.db.listar()[0][0]))  # colunas novas recriadas
 
 
+class TestRetornoEBusca(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = Database(os.path.join(self.tmp.name, "t.db"))
+        hoje = datetime.now().date()
+        self.ontem = (hoje - timedelta(days=1)).isoformat()
+        self.hoje = hoje.isoformat()
+        self.amanha = (hoje + timedelta(days=1)).isoformat()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_lembrete_gravado_e_listado(self):
+        rid = self.db.inserir("Ana", "1", "x", self.amanha)
+        self.assertEqual(self.db.listar()[0][6], self.amanha)
+        self.assertEqual(self.db.obter(rid)[6], self.amanha)
+        self.assertEqual(self.db.obter_detalhado(rid)["lembrete"], self.amanha)
+        self.assertIsNone(self.db.obter(self.db.inserir("Bia", "", "y"))[6])
+
+    def test_lembrete_invalido(self):
+        for ruim in ("31/12/2026", "2026-13-40", "abc"):
+            with self.assertRaises(ValueError):
+                self.db.inserir("Ana", "", "x", ruim)
+        self.assertEqual(self.db.listar(), [])
+
+    def test_atualizar_mantem_define_e_remove(self):
+        rid = self.db.inserir("Ana", "", "x", self.amanha)
+        self.db.atualizar(rid, "Ana", "", "y")                       # omitido: mantém
+        self.assertEqual(self.db.obter(rid)[6], self.amanha)
+        self.db.atualizar(rid, "Ana", "", "y", self.hoje)            # define
+        self.assertEqual(self.db.obter(rid)[6], self.hoje)
+        self.db.atualizar(rid, "Ana", "", "y", None)                 # remove
+        self.assertIsNone(self.db.obter(rid)[6])
+
+    def test_retornos_so_pendentes_hoje_ou_atrasados(self):
+        a = self.db.inserir("A", "", "x", self.ontem)
+        self.db.inserir("B", "", "x", self.hoje)
+        self.db.inserir("C", "", "x", self.amanha)
+        self.db.inserir("D", "", "x")
+        e = self.db.inserir("E", "", "x", self.ontem)
+        self.db.atualizar_status(e, STATUS_ATENDIDA)
+        self.assertEqual(self.db.contar_retornos(), 2)
+        self.assertEqual({r[2] for r in self.db.listar(so_retornos=True)}, {"A", "B"})
+        self.db.excluir(a)
+        self.assertEqual(self.db.contar_retornos(), 1)
+
+    def test_busca_na_descricao(self):
+        self.db.inserir("Ana", "1", "Pediu troca de LEITO urgente")
+        self.db.inserir("Bia", "2", "Dúvida sobre visita")
+        self.assertEqual(len(self.db.listar("leito")), 1)
+        self.assertEqual(len(self.db.listar("duvida")), 1)
+        self.assertEqual(len(self.db.listar("ana")), 1)
+
+    def test_filtro_por_periodo(self):
+        conn = sqlite3.connect(self.db.caminho)
+        antigo = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d %H:%M:%S")
+        conn.execute("INSERT INTO solicitacoes (data_hora, nome_paciente, contato, descricao)"
+                     " VALUES (?, 'Velho', '', 'x')", (antigo,))
+        conn.commit(); conn.close()
+        self.db.inserir("Novo", "", "x")
+        self.assertEqual(len(self.db.listar()), 2)
+        desde7 = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        self.assertEqual([r[2] for r in self.db.listar(desde=desde7)], ["Novo"])
+        with self.assertRaises(ValueError):
+            self.db.listar(desde="ontem")
+
+    def test_migracao_adiciona_lembrete(self):
+        caminho = os.path.join(self.tmp.name, "v1.db")
+        conn = sqlite3.connect(caminho)
+        conn.execute("""CREATE TABLE solicitacoes (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_hora TEXT NOT NULL, nome_paciente TEXT NOT NULL, contato TEXT,
+            descricao TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Pendente')""")
+        conn.execute("INSERT INTO solicitacoes (data_hora, nome_paciente, descricao)"
+                     " VALUES ('2026-01-01 10:00:00', 'Velha', 'x')")
+        conn.commit(); conn.close()
+        db = Database(caminho)
+        self.assertIsNone(db.listar()[0][6])
+        db.atualizar(db.listar()[0][0], "Velha", "", "x", self.hoje)
+        self.assertEqual(db.contar_retornos(), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

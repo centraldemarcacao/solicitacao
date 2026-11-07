@@ -16,6 +16,21 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Novidades da versão 2.4
+
+* **Formulário:** a ordem agora é **Contato**, **Nome** e **Descrição**; o campo
+  "Nome do paciente" virou "Nome" e o contato aceita qualquer informação.
+* **Retorno (lembrete):** campo opcional "Retornar em" (dd/mm/aaaa, com atalhos
+  Amanhã / Em 7 dias). Pendentes com retorno para hoje ou atrasados ficam com a
+  linha vermelha clara, entram no indicador "Retornos a fazer", no filtro
+  **Retornos** e em um aviso ao abrir o programa.
+* **Busca e ordenação:** a busca agora também olha a descrição; clique no título
+  de qualquer coluna para ordenar (clique de novo para inverter); filtro por
+  período (Hoje, Últimos 7 dias, Este mês).
+* **Exportar e imprimir:** botão **Exportar** > "Exportar para Excel (CSV)" ou
+  "Imprimir lista". Vale para o que está na tabela (com filtros e ordem) ou só
+  para as linhas selecionadas.
+
 ## Atualização automática (versão 2.2)
 
 O programa confere, ao abrir, se há versão nova no GitHub e oferece
@@ -45,6 +60,9 @@ anotacoes_hospitalares/
 ├── main.py            # Ponto de entrada
 ├── gui.py             # Janela principal: barra lateral, formulário e histórico
 ├── paginas.py         # Telas de edição, Lixeira e Backup
+├── exportar.py        # CSV e página de impressão
+├── exportacao.py      # Botão Exportar (telas)
+├── test_util_exportar.py  # Testes de datas e exportação
 ├── updater.py         # Atualização: consulta, download, SHA-256 e troca do .exe
 ├── atualizacao.py     # Telas/fluxo da atualização
 ├── test_updater.py    # Testes da atualização
@@ -82,7 +100,7 @@ python main.py
 Testes do banco de dados:
 
 ```bash
-python -m unittest test_database -v
+python -m unittest test_database test_updater test_util_exportar -v
 ```
 
 ## 3. Gerar o executável (.exe)

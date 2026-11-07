@@ -18,7 +18,7 @@ import os
 import sys
 import tkinter as tk
 import traceback
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from tkinter import messagebox
 
 import customtkinter as ctk
@@ -26,6 +26,7 @@ import customtkinter as ctk
 import theme as T
 from database import (
     DIAS_LIXEIRA,
+    normalizar,
     MAX_DESCRICAO,
     STATUS_ATENDIDA,
     STATUS_PENDENTE,
@@ -33,9 +34,21 @@ from database import (
     validar_campos,
 )
 from atualizacao import AtualizacaoMixin
+from exportacao import ExportacaoMixin
 from icons import icone
 from paginas import PaginasExtrasMixin
-from util import cores_status, data_curta, formatar_data, plural, resumir
+from util import (
+    cores_status,
+    data_curta,
+    formatar_data,
+    formatar_lembrete,
+    inicio_do_periodo,
+    interpretar_data,
+    plural,
+    resumir,
+    rotulo_retorno,
+    situacao_retorno,
+)
 from widgets import (
     CaixaBusca,
     CartaoNumero,
@@ -57,13 +70,16 @@ PAG_BACKUP = "backup"
 
 # Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
 LARGURA_BASE, ALTURA_BASE = 1240, 780
-MINIMO_LARGURA, MINIMO_ALTURA = 1140, 700
+MINIMO_LARGURA, MINIMO_ALTURA = 1180, 700
 
+# rótulo -> (status, somente retornos de hoje/atrasados)
 FILTROS_STATUS = {
-    "Todos": None,
-    "Pendentes": STATUS_PENDENTE,
-    "Atendidas": STATUS_ATENDIDA,
+    "Todos": (None, False),
+    "Pendentes": (STATUS_PENDENTE, False),
+    "Atendidas": (STATUS_ATENDIDA, False),
+    "Retornos": (None, True),
 }
+PERIODOS = ("Todo o período", "Hoje", "Últimos 7 dias", "Este mês")
 
 DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
         "sexta-feira", "sábado", "domingo"]
@@ -89,7 +105,7 @@ def localizar_arquivo(nome: str):
 # ======================================================================
 # Janela principal
 # ======================================================================
-class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
+class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -115,6 +131,8 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self._com_erro = set()      # campos do formulário com erro
         self._rotulos_erro = {}     # campo -> rótulo da mensagem de erro
         self._total_exibido = 0
+        self._registros_exibidos = []
+        self._ordem = ("data_hora", True)   # (coluna, decrescente)
         self._total_lixeira = 0
 
         try:
@@ -152,6 +170,15 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self._atualizar_relogio()
         if aviso_inicial:
             self.toast.mostrar(aviso_inicial, "erro", 8000)
+        else:
+            try:
+                pendentes_retorno = self.db.contar_retornos()
+            except Exception:
+                pendentes_retorno = 0
+            if pendentes_retorno:
+                self.toast.mostrar(
+                    f"Retornos a fazer: {pendentes_retorno} (hoje ou atrasados). "
+                    "Veja em Histórico > Retornos.", "aviso", 9000)
         self._iniciar_atualizacao()
 
     # ==================================================================
@@ -323,7 +350,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         elif chave == PAG_BACKUP:
             self.atualizar_backups()
         else:
-            self.ent_nome.focus_set()
+            self.ent_contato.focus_set()
 
     @staticmethod
     def _card(pai) -> ctk.CTkFrame:
@@ -352,7 +379,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         pagina = ctk.CTkFrame(pai, fg_color="transparent")
         self._cabecalho(
             pagina, "Novo registro",
-            "Registre rapidamente uma solicitação de paciente.",
+            "Registre rapidamente uma solicitação.",
         )
 
         corpo = ctk.CTkFrame(pagina, fg_color="transparent")
@@ -384,21 +411,19 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w",
         ).pack(anchor="w", pady=(2, 16))
 
-        # Nome do paciente
-        self._rotulo(f, "Nome do paciente *")
+        # Contato (opcional)
+        self._rotulo(f, "Contato")
+        self.ent_contato = self._entrada(f, "Ex.: (84) 99999-0000")
+        self.ent_contato.pack(fill="x", pady=(6, 0))
+        self.err_contato = self._rotulo_erro(f)
+        self._registrar_campo(self.ent_contato, self.err_contato)
+
+        # Nome
+        self._rotulo(f, "Nome *")
         self.ent_nome = self._entrada(f, "Ex.: Maria da Silva")
         self.ent_nome.pack(fill="x", pady=(6, 0))
         self.err_nome = self._rotulo_erro(f)
         self._registrar_campo(self.ent_nome, self.err_nome)
-
-        # Contato
-        self._rotulo(f, "Contato (telefone, ramal ou e-mail)")
-        self.ent_contato = self._entrada(
-            f, "Ex.: (84) 99999-0000  •  Ramal 2045  •  nome@email.com"
-        )
-        self.ent_contato.pack(fill="x", pady=(6, 0))
-        self.err_contato = self._rotulo_erro(f)
-        self._registrar_campo(self.ent_contato, self.err_contato)
 
         # Descrição
         linha = ctk.CTkFrame(f, fg_color="transparent")
@@ -414,6 +439,10 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         # baixas, quem encolhe é a caixa de texto (e nada some).
         botoes = ctk.CTkFrame(f, fg_color="transparent")
         botoes.pack(side="bottom", fill="x", pady=(6, 0))
+        linha_retorno, self.ent_retorno, self.err_retorno = self._campo_retorno(f)
+        linha_retorno.pack(side="bottom", fill="x", pady=(0, 2))
+        self._registrar_campo(self.ent_retorno, self.err_retorno)
+        self._ligar_mascara_data(self.ent_retorno)
         self.err_desc = self._rotulo_erro(f, lado="bottom")
 
         self.txt_desc = ctk.CTkTextbox(
@@ -441,6 +470,58 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             botoes, text="Atalho: Ctrl + S", font=fonte(12),
             text_color=T.TEXTO_SUAVE,
         ).pack(side="right")
+
+    def _campo_retorno(self, pai):
+        """Linha 'Retornar em' (opcional): data, atalhos e mensagem de erro."""
+        linha = ctk.CTkFrame(pai, fg_color="transparent")
+        ctk.CTkLabel(
+            linha, text="Retornar em", font=fonte(14, "bold"),
+            text_color=T.TEXTO, anchor="w",
+        ).pack(side="left", padx=(0, 10))
+        entrada = ctk.CTkEntry(
+            linha, width=130, height=38, font=fonte(14), placeholder_text="dd/mm/aaaa",
+            placeholder_text_color=T.PLACEHOLDER, corner_radius=10, border_width=2,
+            border_color=T.BORDA, fg_color=T.BRANCO, text_color=T.TEXTO,
+        )
+        entrada.pack(side="left")
+        for texto, dias in (("Amanhã", 1), ("Em 7 dias", 7)):
+            ctk.CTkButton(
+                linha, text=texto, width=80, height=32, corner_radius=8,
+                font=fonte(12, "bold"), fg_color=T.TEAL_CLARO, text_color=T.TEAL_ESCURO,
+                hover_color=T.TEAL_BORDA,
+                command=lambda d=dias, e=entrada: self._definir_retorno(e, d),
+            ).pack(side="left", padx=(8, 0))
+        ctk.CTkButton(
+            linha, text="Limpar", width=64, height=32, corner_radius=8,
+            font=fonte(12, "bold"), fg_color="transparent", text_color=T.TEXTO_SUAVE,
+            hover_color=T.FUNDO,
+            command=lambda e=entrada: self._definir_retorno(e, None),
+        ).pack(side="left", padx=(4, 0))
+        erro = ctk.CTkLabel(
+            linha, text="", font=fonte(12, "bold"), text_color=T.VERMELHO, anchor="w",
+        )
+        erro.pack(side="left", padx=(12, 0))
+        return linha, entrada, erro
+
+    @staticmethod
+    def _definir_retorno(entrada, dias) -> None:
+        entrada.delete(0, "end")
+        if dias is not None:
+            entrada.insert(0, (date.today() + timedelta(days=dias)).strftime("%d/%m/%Y"))
+
+    @staticmethod
+    def _ligar_mascara_data(entrada) -> None:
+        """Digitando só números, coloca as barras sozinho: 10112026 -> 10/11/2026."""
+        def aplicar(_evento=None):
+            texto = entrada.get()
+            if not texto or not texto.replace("/", "").isdigit() or len(texto) > 10:
+                return
+            n = texto.replace("/", "")
+            novo = n[:2] + ("/" + n[2:4] if len(n) > 2 else "") + ("/" + n[4:8] if len(n) > 4 else "")
+            if novo != texto:
+                entrada.delete(0, "end")
+                entrada.insert(0, novo)
+        entrada.bind("<KeyRelease>", aplicar, add="+")
 
     @staticmethod
     def _rotulo(pai, texto: str, lado: str = "top") -> None:
@@ -531,11 +612,16 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
         self._limpar_todos_erros()
         erros = validar_campos(nome, contato, descricao)
+        lembrete = None
+        try:
+            lembrete = interpretar_data(self._texto(self.ent_retorno))
+        except ValueError as exc:
+            erros["retorno"] = str(exc)
         if erros:
-            campos = {"nome": self.ent_nome, "contato": self.ent_contato,
-                      "descricao": self.txt_desc}
+            campos = {"contato": self.ent_contato, "nome": self.ent_nome,
+                      "descricao": self.txt_desc, "retorno": self.ent_retorno}
             primeiro = None
-            for chave in ("nome", "contato", "descricao"):
+            for chave in ("contato", "nome", "descricao", "retorno"):
                 if chave in erros:
                     self._marcar_erro(campos[chave], erros[chave])
                     primeiro = primeiro or campos[chave]
@@ -548,7 +634,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             return
 
         try:
-            self.db.inserir(nome, contato, descricao)
+            self.db.inserir(nome, contato, descricao, lembrete)
         except Exception as exc:
             self.toast.mostrar(f"Não foi possível salvar: {exc}", "erro", 6000)
             return
@@ -556,11 +642,12 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.limpar_formulario()
         self.atualizar_tudo()
         self.toast.mostrar("Registro salvo com sucesso.", "sucesso")
-        self.ent_nome.focus_set()
+        self.ent_contato.focus_set()
 
     def limpar_formulario(self) -> None:
-        self.ent_nome.delete(0, "end")
         self.ent_contato.delete(0, "end")
+        self.ent_nome.delete(0, "end")
+        self.ent_retorno.delete(0, "end")
         self.txt_desc.delete("1.0", "end")
         self._limpar_todos_erros()
         self._atualizar_contador()
@@ -578,6 +665,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.res_hoje = self._linha_resumo(r, "Registradas hoje", T.TEAL)
         self.res_pend = self._linha_resumo(r, "Pendentes", T.AMBAR)
         self.res_aten = self._linha_resumo(r, "Atendidas", T.VERDE)
+        self.res_retornos = self._linha_resumo(r, "Retornos a fazer", T.VERMELHO)
 
         recentes = self._card(lateral)
         recentes.pack(fill="both", expand=True, pady=(22, 0))
@@ -611,6 +699,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.res_hoje.configure(text=str(self.db.contar_hoje()))
         self.res_pend.configure(text=str(contagem[STATUS_PENDENTE]))
         self.res_aten.configure(text=str(contagem[STATUS_ATENDIDA]))
+        self.res_retornos.configure(text=str(self.db.contar_retornos()))
 
         for filho in self.lista_recentes.winfo_children():
             filho.destroy()
@@ -623,7 +712,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             ).pack(anchor="w", pady=10)
             return
 
-        for _rid, data_hora, nome, _contato, descricao, status in registros:
+        for _rid, data_hora, nome, _contato, descricao, status, _lemb in registros:
             fundo, cor_texto = cores_status(status)
             linha = ctk.CTkFrame(self.lista_recentes, fg_color="transparent")
             linha.pack(fill="x", pady=6)
@@ -648,20 +737,22 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         pagina = ctk.CTkFrame(pai, fg_color="transparent")
         self._cabecalho(
             pagina, "Histórico de registros",
-            "Consulte, filtre, edite e atualize as solicitações registradas.",
+            "Consulte, filtre, ordene, edite e exporte as solicitações registradas.",
         )
 
         # --- Indicadores ---------------------------------------------
         cartoes = ctk.CTkFrame(pagina, fg_color="transparent")
         cartoes.pack(fill="x", padx=34, pady=(0, 18))
-        for i in range(3):
+        for i in range(4):
             cartoes.grid_columnconfigure(i, weight=1, uniform="cartao")
         self.cartao_total = CartaoNumero(cartoes, "Total de registros", T.TEAL, T.TEAL_CLARO, "list")
         self.cartao_pend = CartaoNumero(cartoes, "Pendentes", T.AMBAR, T.AMBAR_CLARO, "clock")
         self.cartao_aten = CartaoNumero(cartoes, "Atendidas", T.VERDE, T.VERDE_CLARO, "check")
-        self.cartao_total.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        self.cartao_pend.grid(row=0, column=1, sticky="ew", padx=10)
-        self.cartao_aten.grid(row=0, column=2, sticky="ew", padx=(10, 0))
+        self.cartao_ret = CartaoNumero(cartoes, "Retornos a fazer", T.VERMELHO, T.VERMELHO_CLARO, "warning")
+        self.cartao_total.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.cartao_pend.grid(row=0, column=1, sticky="ew", padx=8)
+        self.cartao_aten.grid(row=0, column=2, sticky="ew", padx=8)
+        self.cartao_ret.grid(row=0, column=3, sticky="ew", padx=(8, 0))
 
         # --- Cartão da tabela ----------------------------------------
         card = self._card(pagina)
@@ -669,10 +760,11 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
         linha1 = ctk.CTkFrame(card, fg_color="transparent")
         linha1.pack(fill="x", padx=22, pady=(20, 12))
-        self.busca = CaixaBusca(linha1, "Buscar por nome ou contato...", self.atualizar_historico)
+        self.busca = CaixaBusca(linha1, "Buscar por nome, contato ou descrição...",
+                                self.atualizar_historico, largura=300)
         self.busca.pack(side="left")
         self.filtro_status = ctk.CTkSegmentedButton(
-            linha1, values=list(FILTROS_STATUS), height=40, font=fonte(13, "bold"),
+            linha1, values=list(FILTROS_STATUS), height=40, font=fonte(12, "bold"),
             selected_color=T.TEAL, selected_hover_color=T.TEAL_ESCURO,
             unselected_color=T.TEAL_CLARO, unselected_hover_color=T.TEAL_BORDA,
             text_color=T.TEXTO, fg_color=T.TEAL_CLARO,
@@ -680,38 +772,57 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         )
         self.filtro_status.set("Todos")
         self.filtro_status.pack(side="right")
+        self.filtro_periodo = ctk.CTkOptionMenu(
+            linha1, values=list(PERIODOS), width=150, height=40, font=fonte(13),
+            dropdown_font=fonte(13), fg_color=T.TEAL_CLARO, text_color=T.TEXTO,
+            button_color=T.TEAL, button_hover_color=T.TEAL_ESCURO,
+            dropdown_fg_color=T.BRANCO, dropdown_text_color=T.TEXTO,
+            dropdown_hover_color=T.TEAL_CLARO,
+            command=lambda _valor: self.atualizar_historico(),
+        )
+        self.filtro_periodo.set(PERIODOS[0])
+        self.filtro_periodo.pack(side="right", padx=(0, 10))
 
-        # Ações. O botão da direita é empacotado primeiro: nunca fica escondido.
+        # Ações. Os botões da direita são empacotados primeiro: nunca ficam escondidos.
+        # Larguras fixas (sem elas o CustomTkinter usa 140 px por botão).
         linha2 = ctk.CTkFrame(card, fg_color="transparent")
         linha2.pack(fill="x", padx=22, pady=(0, 14))
         ctk.CTkButton(
-            linha2, text="Excluir", height=40, width=110, corner_radius=10,
+            linha2, text="Excluir", height=40, width=104, corner_radius=10,
             image=icone("trash", T.VERMELHO, 18), compound="left",
             font=fonte(13, "bold"), fg_color="transparent", text_color=T.VERMELHO,
             border_width=2, border_color=T.VERMELHO, hover_color=T.VERMELHO_CLARO,
             command=self.excluir_selecionados,
         ).pack(side="right")
+        self.btn_exportar = ctk.CTkButton(
+            linha2, text="Exportar", height=40, width=118, corner_radius=10,
+            image=icone("download", T.TEAL, 18), compound="left",
+            font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
+            border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
+            command=self._abrir_menu_exportar,
+        )
+        self.btn_exportar.pack(side="right", padx=(0, 8))
         ctk.CTkButton(
-            linha2, text="Atendida", height=40, corner_radius=10,
+            linha2, text="Atendida", height=40, width=118, corner_radius=10,
             image=icone("check", T.BRANCO, 18), compound="left",
             font=fonte(13, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER,
             command=lambda: self.alterar_status(STATUS_ATENDIDA),
         ).pack(side="left")
         ctk.CTkButton(
-            linha2, text="Pendente", height=40, corner_radius=10,
+            linha2, text="Pendente", height=40, width=118, corner_radius=10,
             image=icone("clock", T.BRANCO, 18), compound="left",
             font=fonte(13, "bold"), fg_color=T.AMBAR, hover_color=T.AMBAR_HOVER,
             command=lambda: self.alterar_status(STATUS_PENDENTE),
         ).pack(side="left", padx=(8, 0))
         ctk.CTkButton(
-            linha2, text="Detalhes", height=40, corner_radius=10,
+            linha2, text="Detalhes", height=40, width=118, corner_radius=10,
             image=icone("eye", T.TEAL, 18), compound="left",
             font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
             border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
             command=self.ver_detalhes,
-        ).pack(side="left", padx=(24, 0))
+        ).pack(side="left", padx=(20, 0))
         ctk.CTkButton(
-            linha2, text="Editar", height=40, corner_radius=10,
+            linha2, text="Editar", height=40, width=100, corner_radius=10,
             image=icone("edit", T.TEAL, 18), compound="left",
             font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
             border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
@@ -728,21 +839,23 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.lbl_contagem.pack(side="left")
         ctk.CTkLabel(
             rodape,
-            text="Duplo clique: detalhes   •   F2: editar   •   Delete: excluir   •   Clique direito: mais opções",
+            text="Duplo clique: detalhes  •  F2: editar  •  Delete: excluir  •  Clique no título: ordenar",
             font=fonte(12), text_color=T.TEXTO_SUAVE, anchor="e",
         ).pack(side="right")
 
         self.tabela = TabelaRegistros(
             card,
-            [("data_hora", "Data/Hora", 150, False), ("nome", "Paciente", 210, False),
-             ("contato", "Contato", 170, False), ("descricao", "Descrição", 340, True),
-             ("status", "Status", 110, False)],
+            [("data_hora", "Data/Hora", 135, False), ("nome", "Nome", 170, False),
+             ("contato", "Contato", 130, False), ("descricao", "Descrição", 220, True),
+             ("retorno", "Retorno", 125, False), ("status", "Status", 95, False)],
             self._px,
             ao_selecionar=self._atualizar_rodape,
             ao_duplo_clique=lambda _iid: self.ver_detalhes(),
+            ao_ordenar=self._ordenar_por,
         )
         self.tabela.pack(fill="both", expand=True, padx=22, pady=(0, 12))
         self._configurar_interacoes_tabela()
+        self.tabela.definir_ordenacao(*self._ordem)
         return pagina
 
     def _configurar_interacoes_tabela(self) -> None:
@@ -769,29 +882,75 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
     # --- Atualização da tabela e indicadores ---------------------------
     @staticmethod
-    def _tag_status(status: str) -> str:
+    def _tag_registro(status: str, lembrete) -> str:
+        """Cor da linha: vermelha clara = retorno hoje/atrasado; senão, pelo status."""
+        if situacao_retorno(lembrete, status) in ("hoje", "atrasado"):
+            return "vencida"
         return "atendida" if status == STATUS_ATENDIDA else "pendente"
+
+    def _ordenar_por(self, coluna: str) -> None:
+        """Clique no título: ordena; novo clique na mesma coluna inverte."""
+        atual, decrescente = self._ordem
+        if coluna == atual:
+            decrescente = not decrescente
+        else:
+            decrescente = coluna == "data_hora"   # datas: mais recentes primeiro
+        self._ordem = (coluna, decrescente)
+        self.atualizar_historico()
+
+    def _ordenar_registros(self, registros: list) -> list:
+        coluna, decrescente = self._ordem
+        if coluna == "retorno":   # sem retorno sempre no fim, em qualquer sentido
+            com = sorted((r for r in registros if r[6]), key=lambda r: r[6], reverse=decrescente)
+            return com + [r for r in registros if not r[6]]
+        chaves = {
+            "data_hora": lambda r: r[1], "nome": lambda r: normalizar(r[2]),
+            "contato": lambda r: normalizar(r[3]),
+            "descricao": lambda r: normalizar(r[4]), "status": lambda r: r[5],
+        }
+        return sorted(registros, key=chaves[coluna], reverse=decrescente)
+
+    def _filtros_atuais(self):
+        """(texto, status, só retornos, data inicial) escolhidos na tela."""
+        status, so_retornos = FILTROS_STATUS[self.filtro_status.get()]
+        return (self.busca.get(), status, so_retornos,
+                inicio_do_periodo(self.filtro_periodo.get()))
+
+    def _descricao_filtro(self) -> str:
+        texto, status, so_retornos, desde = self._filtros_atuais()
+        partes = [self.filtro_periodo.get()]
+        if so_retornos:
+            partes.append("retornos de hoje ou atrasados")
+        elif status:
+            partes.append(status.lower() + "s")
+        if texto:
+            partes.append(f"busca: “{texto}”")
+        return "Filtro: " + ", ".join(partes)
 
     def atualizar_historico(self) -> None:
         if not hasattr(self, "tabela"):
             return  # interface ainda em construção
 
-        filtro = self.busca.get()
-        status = FILTROS_STATUS.get(self.filtro_status.get())
-        registros = self.db.listar(filtro, status)
+        texto, status, so_retornos, desde = self._filtros_atuais()
+        registros = self._ordenar_registros(
+            self.db.listar(texto, status, desde=desde, so_retornos=so_retornos))
+        self._registros_exibidos = registros
 
         self.tabela.preencher([
             (str(rid), (formatar_data(data_hora), nome, contato,
-                        " ".join(descricao.split()), st), self._tag_status(st))
-            for rid, data_hora, nome, contato, descricao, st in registros
+                        " ".join(descricao.split()), rotulo_retorno(lemb, st), st),
+             self._tag_registro(st, lemb))
+            for rid, data_hora, nome, contato, descricao, st, lemb in registros
         ])
+        self.tabela.definir_ordenacao(*self._ordem)
 
         self._total_exibido = len(registros)
+        filtrando = texto or status or so_retornos or desde
         if registros:
             self.tabela.esconder_vazio()
-        elif filtro or status:
+        elif filtrando:
             self.tabela.mostrar_vazio("Nenhum registro encontrado",
-                                      "Tente outro nome, contato ou filtro.")
+                                      "Tente outra busca, filtro ou período.")
         else:
             self.tabela.mostrar_vazio("Nenhuma solicitação registrada ainda",
                                       "Use “Novo registro” no menu para criar a primeira.")
@@ -801,7 +960,19 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.cartao_total.definir(pend + aten)
         self.cartao_pend.definir(pend)
         self.cartao_aten.definir(aten)
+        self.cartao_ret.definir(self.db.contar_retornos())
         self._atualizar_rodape()
+
+    def _abrir_menu_exportar(self) -> None:
+        menu = tk.Menu(self, tearoff=0, font=(T.FONTE, 11))
+        menu.add_command(label="Exportar para Excel (CSV)...", command=self.exportar_csv)
+        menu.add_command(label="Imprimir lista...", command=self.imprimir_lista)
+        x = self.btn_exportar.winfo_rootx()
+        y = self.btn_exportar.winfo_rooty() + self.btn_exportar.winfo_height()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
 
     def _atualizar_rodape(self) -> None:
         texto = plural(self._total_exibido, "registro exibido", "registros exibidos")
@@ -888,6 +1059,16 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         finally:
             self.menu_contexto.grab_release()
 
+    @staticmethod
+    def _texto_retorno(reg: dict) -> str:
+        if not reg["lembrete"]:
+            return "Não marcado"
+        data = formatar_lembrete(reg["lembrete"])
+        situacao = situacao_retorno(reg["lembrete"], reg["status"])
+        if situacao == "atrasado":
+            return f"{data} (atrasado)"
+        return f"{data} (hoje)" if situacao == "hoje" else data
+
     # --- Janela de detalhes ---------------------------------------------
     def ver_detalhes(self) -> None:
         ids = self._ids_selecionados()
@@ -927,7 +1108,7 @@ class App(AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         for coluna, (titulo, valor) in enumerate((
             ("DATA E HORA", formatar_data(reg["data_hora"])),
             ("CONTATO", reg["contato"] or "Não informado"),
-            ("Nº DO REGISTRO", f"{rid}"),
+            ("RETORNO", self._texto_retorno(reg)),
         )):
             bloco = ctk.CTkFrame(meta, fg_color="transparent")
             bloco.grid(row=0, column=coluna, sticky="w")

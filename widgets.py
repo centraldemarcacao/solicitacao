@@ -224,13 +224,15 @@ class TabelaRegistros(ctk.CTkFrame):
     px: função que converte tamanho lógico em pixels reais (escala da tela).
     """
 
-    def __init__(self, pai, colunas, px, ao_selecionar=None, ao_duplo_clique=None) -> None:
+    def __init__(self, pai, colunas, px, ao_selecionar=None, ao_duplo_clique=None,
+                 ao_ordenar=None) -> None:
         super().__init__(
             pai, fg_color=T.BRANCO, corner_radius=0,
             border_width=1, border_color=T.BORDA,
         )
         self._ao_selecionar = ao_selecionar
         self._ao_duplo_clique = ao_duplo_clique
+        self._titulos = {c[0]: c[1] for c in colunas}
         self._tag_base = {}
         self._sel_aplicada = set()
         self._estilizar(px)
@@ -242,10 +244,15 @@ class TabelaRegistros(ctk.CTkFrame):
             style="Hosp.Treeview", selectmode="extended",
         )
         for chave, titulo, largura, estica in colunas:
-            self.tree.heading(chave, text=titulo, anchor="w")
+            if ao_ordenar:
+                self.tree.heading(chave, text=titulo, anchor="w",
+                                  command=lambda c=chave: ao_ordenar(c))
+            else:
+                self.tree.heading(chave, text=titulo, anchor="w")
             self.tree.column(chave, width=largura, minwidth=90, anchor="w", stretch=estica)
         for tag, fundo in (("pendente", T.AMBAR_CLARO), ("atendida", T.VERDE_CLARO),
-                           ("neutra", T.BRANCO), ("selecionada", T.SELECAO)):
+                           ("neutra", T.BRANCO), ("vencida", T.VERMELHO_CLARO),
+                           ("selecionada", T.SELECAO)):
             self.tree.tag_configure(tag, background=fundo, foreground=T.TEXTO)
 
         barra = ttk.Scrollbar(self, orient="vertical", style="Hosp.Vertical.TScrollbar",
@@ -325,6 +332,12 @@ class TabelaRegistros(ctk.CTkFrame):
         if manter:
             self.tree.selection_set(manter)
         self._sincronizar()
+
+    def definir_ordenacao(self, chave: str, decrescente: bool) -> None:
+        """Mostra a seta ▲/▼ no título da coluna ordenada."""
+        for col, titulo in self._titulos.items():
+            seta = (" ▼" if decrescente else " ▲") if col == chave else ""
+            self.tree.heading(col, text=titulo + seta)
 
     def selecionados(self) -> list:
         return list(self.tree.selection())

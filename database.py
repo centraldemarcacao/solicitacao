@@ -10,7 +10,7 @@ O banco é criado automaticamente na primeira execução, em uma pasta
 "dados" ao lado do executável (ou ao lado deste arquivo, em desenvolvimento).
 
 Recursos:
-  - edição de registros;
+  - edição de registros e data de retorno (lembrete);
   - exclusão reversível (lixeira, com limpeza automática após alguns dias);
   - backups consistentes (API de backup do SQLite) com rotação e restauração;
   - migração automática de bancos criados por versões anteriores.
@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS solicitacoes (
     status        TEXT    NOT NULL DEFAULT 'Pendente'
                   CHECK (status IN ('Pendente', 'Atendida')),
     editado_em    TEXT,
-    excluido_em   TEXT
+    excluido_em   TEXT,
+    lembrete      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_solicitacoes_nome
@@ -61,10 +62,12 @@ CREATE INDEX IF NOT EXISTS idx_solicitacoes_contato
 """
 
 # Colunas acrescentadas depois da versão 1 (migradas em bancos antigos)
-COLUNAS_NOVAS = ("editado_em", "excluido_em")
+COLUNAS_NOVAS = ("editado_em", "excluido_em", "lembrete")
 
-# Tipo auxiliar: (id, data_hora, nome_paciente, contato, descricao, status)
-Registro = Tuple[int, str, str, str, str, str]
+# Tipo auxiliar: (id, data_hora, nome_paciente, contato, descricao, status, lembrete)
+Registro = Tuple[int, str, str, str, str, str, Optional[str]]
+
+_MANTER = object()   # 'não altere o lembrete' (diferente de None = remover)
 
 
 # ----------------------------------------------------------------------
@@ -92,7 +95,7 @@ def validar_campos(nome: str, contato: str, descricao: str) -> dict:
     """
     erros = {}
     if not nome:
-        erros["nome"] = "Informe o nome do paciente."
+        erros["nome"] = "Informe o nome."
     elif len(nome) > MAX_NOME:
         erros["nome"] = f"Use no máximo {MAX_NOME} caracteres."
     if len(contato) > MAX_CONTATO:
@@ -102,6 +105,18 @@ def validar_campos(nome: str, contato: str, descricao: str) -> dict:
     elif len(descricao) > MAX_DESCRICAO:
         erros["descricao"] = f"Use no máximo {MAX_DESCRICAO} caracteres."
     return erros
+
+
+def validar_lembrete(valor) -> Optional[str]:
+    """Aceita None/'' (sem lembrete) ou uma data ISO 'AAAA-MM-DD'. Retorna a data
+    normalizada. Lança ValueError se for inválida."""
+    valor = (valor or "").strip() if isinstance(valor, str) or valor is None else valor
+    if not valor:
+        return None
+    try:
+        return datetime.strptime(valor, "%Y-%m-%d").strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        raise ValueError("Data de retorno inválida.")
 
 
 def _pasta_gravavel(pasta: str) -> bool:
@@ -173,6 +188,10 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_solicitacoes_excluido "
                 "ON solicitacoes (excluido_em)"
             )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_solicitacoes_lembrete "
+                "ON solicitacoes (lembrete)"
+            )
             conn.commit()
         finally:
             conn.close()
@@ -216,49 +235,59 @@ class Database:
             raise ValueError(next(iter(erros.values())))
         return nome, contato, descricao
 
-    def inserir(self, nome_paciente: str, contato: str, descricao: str) -> int:
+    def inserir(self, nome_paciente: str, contato: str, descricao: str,
+                lembrete: Optional[str] = None) -> int:
         """Insere uma nova solicitação (status inicial: Pendente).
 
         A data/hora é gerada automaticamente. Retorna o id criado.
         Lança ValueError se algum campo for inválido.
         """
         nome, contato, descricao = self._validar(nome_paciente, contato, descricao)
+        lembrete = validar_lembrete(lembrete)
         cur = self._executar(
             """
             INSERT INTO solicitacoes
-                (data_hora, nome_paciente, contato, descricao, status)
-            VALUES (?, ?, ?, ?, ?)
+                (data_hora, nome_paciente, contato, descricao, status, lembrete)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (agora(), nome, contato, descricao, STATUS_PENDENTE),
+            (agora(), nome, contato, descricao, STATUS_PENDENTE, lembrete),
         )
         return int(cur.lastrowid)
 
     def atualizar(self, registro_id: int, nome_paciente: str, contato: str,
-                  descricao: str) -> bool:
-        """Edita nome, contato e descrição. Retorna False se o registro não existir
-        (ou estiver na lixeira). Lança ValueError se algum campo for inválido."""
+                  descricao: str, lembrete=_MANTER) -> bool:
+        """Edita nome, contato, descrição e (opcionalmente) a data de retorno.
+
+        `lembrete`: omitido = mantém; None = remove; 'AAAA-MM-DD' = define.
+        Retorna False se o registro não existir (ou estiver na lixeira).
+        Lança ValueError se algum campo for inválido."""
         nome, contato, descricao = self._validar(nome_paciente, contato, descricao)
-        cur = self._executar(
-            """
-            UPDATE solicitacoes
-               SET nome_paciente = ?, contato = ?, descricao = ?, editado_em = ?
-             WHERE id = ? AND excluido_em IS NULL
-            """,
-            (nome, contato, descricao, agora(), int(registro_id)),
-        )
-        return cur.rowcount > 0
+        sql = ("UPDATE solicitacoes SET nome_paciente = ?, contato = ?, "
+               "descricao = ?, editado_em = ?")
+        params: list = [nome, contato, descricao, agora()]
+        if lembrete is not _MANTER:
+            sql += ", lembrete = ?"
+            params.append(validar_lembrete(lembrete))
+        sql += " WHERE id = ? AND excluido_em IS NULL"
+        params.append(int(registro_id))
+        return self._executar(sql, tuple(params)).rowcount > 0
 
     def listar(
         self,
         filtro: str = "",
         status: Optional[str] = None,
         limite: Optional[int] = None,
+        desde: Optional[str] = None,
+        so_retornos: bool = False,
     ) -> List[Registro]:
         """Lista registros (fora da lixeira), do mais recente ao mais antigo.
 
-        `filtro` busca no nome ou no contato, sem diferenciar maiúsculas nem acentos.
+        `filtro` busca no nome, no contato e na descrição, sem diferenciar
+        maiúsculas nem acentos.
         `status` (opcional) restringe a "Pendente" ou "Atendida".
         `limite` (opcional) devolve apenas os N registros mais recentes.
+        `desde` (opcional, 'AAAA-MM-DD') mantém só registros criados a partir do dia.
+        `so_retornos` mantém só pendentes com retorno para hoje ou atrasado.
         Consulta parametrizada: protegida contra SQL injection.
         """
         filtro = (filtro or "").strip()
@@ -268,10 +297,17 @@ class Database:
         if filtro:
             condicoes.append(
                 "(norm(nome_paciente) LIKE ? ESCAPE '\\' "
-                "OR norm(contato) LIKE ? ESCAPE '\\')"
+                "OR norm(contato) LIKE ? ESCAPE '\\' "
+                "OR norm(descricao) LIKE ? ESCAPE '\\')"
             )
             termo = f"%{_escapar_like(normalizar(filtro))}%"
-            params.extend([termo, termo])
+            params.extend([termo, termo, termo])
+        if desde:
+            condicoes.append("substr(data_hora, 1, 10) >= ?")
+            params.append(validar_lembrete(desde))
+        if so_retornos:
+            condicoes.append("status = ? AND lembrete IS NOT NULL AND lembrete <= ?")
+            params.extend([STATUS_PENDENTE, datetime.now().strftime("%Y-%m-%d")])
         if status:
             if status not in (STATUS_PENDENTE, STATUS_ATENDIDA):
                 raise ValueError(f"Status inválido: {status}")
@@ -279,7 +315,7 @@ class Database:
             params.append(status)
 
         sql = (
-            "SELECT id, data_hora, nome_paciente, contato, descricao, status "
+            "SELECT id, data_hora, nome_paciente, contato, descricao, status, lembrete "
             "FROM solicitacoes WHERE " + " AND ".join(condicoes) +
             " ORDER BY data_hora DESC, id DESC"
         )
@@ -291,7 +327,7 @@ class Database:
     def obter(self, registro_id: int) -> Optional[Registro]:
         """Retorna um registro (fora da lixeira) pelo id, ou None."""
         linhas = self._consultar(
-            "SELECT id, data_hora, nome_paciente, contato, descricao, status "
+            "SELECT id, data_hora, nome_paciente, contato, descricao, status, lembrete "
             "FROM solicitacoes WHERE id = ? AND excluido_em IS NULL",
             (int(registro_id),),
         )
@@ -302,7 +338,7 @@ class Database:
         (inclusive `editado_em` e `excluido_em`)."""
         sql = (
             "SELECT id, data_hora, nome_paciente, contato, descricao, status, "
-            "editado_em, excluido_em FROM solicitacoes WHERE id = ?"
+            "editado_em, excluido_em, lembrete FROM solicitacoes WHERE id = ?"
         )
         if not incluir_excluidos:
             sql += " AND excluido_em IS NULL"
@@ -310,7 +346,7 @@ class Database:
         if not linhas:
             return None
         chaves = ("id", "data_hora", "nome", "contato", "descricao", "status",
-                  "editado_em", "excluido_em")
+                  "editado_em", "excluido_em", "lembrete")
         return dict(zip(chaves, linhas[0]))
 
     def atualizar_status(self, registro_id: int, novo_status: str) -> None:
@@ -331,6 +367,15 @@ class Database:
         ):
             resultado[status] = total
         return resultado
+
+    def contar_retornos(self) -> int:
+        """Pendentes com retorno marcado para hoje ou já atrasado."""
+        hoje = datetime.now().strftime("%Y-%m-%d")
+        return int(self._consultar(
+            "SELECT COUNT(*) FROM solicitacoes WHERE excluido_em IS NULL "
+            "AND status = ? AND lembrete IS NOT NULL AND lembrete <= ?",
+            (STATUS_PENDENTE, hoje),
+        )[0][0])
 
     def contar_hoje(self) -> int:
         """Quantidade de solicitações registradas hoje (sem contar a lixeira)."""

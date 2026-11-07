@@ -124,7 +124,15 @@ def _database(d, c):
     d.arc(_caixa(12, 42, 52, 56), start=0, end=180, fill=c, width=larg)
 
 
+def _download(d, c):
+    # seta para baixo sobre uma bandeja
+    _linha(d, [(32, 8), (32, 37)], c, 6)
+    _linha(d, [(18, 26), (32, 40), (46, 26)], c, 6)
+    _linha(d, [(10, 53), (54, 53)], c, 6)
+
+
 _DESENHOS = {
+    "download": _download,
     "edit": _edit,
     "restore": _restore,
     "database": _database,

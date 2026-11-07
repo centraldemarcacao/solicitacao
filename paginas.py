@@ -19,7 +19,14 @@ import customtkinter as ctk
 import theme as T
 from database import DIAS_LIXEIRA, BACKUPS_MANTER, validar_campos
 from icons import icone
-from util import formatar_data, formatar_tamanho, plural, resumir
+from util import (
+    formatar_data,
+    formatar_lembrete,
+    formatar_tamanho,
+    interpretar_data,
+    plural,
+    resumir,
+)
 from widgets import (
     DialogoConfirmacao,
     TabelaRegistros,
@@ -61,7 +68,7 @@ class PaginasExtrasMixin:
         janela = ctk.CTkToplevel(self, fg_color=T.BRANCO)
         janela.title(f"Editar solicitação nº {reg['id']}")
         janela.resizable(False, False)
-        centralizar(janela, self, 620, 640)
+        centralizar(janela, self, 640, 720)
         ctk.CTkFrame(janela, fg_color=T.TEAL, height=6, corner_radius=0).pack(fill="x")
 
         # Botões presos à base: em telas baixas quem encolhe é a descrição.
@@ -79,19 +86,23 @@ class PaginasExtrasMixin:
             font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w",
         ).pack(anchor="w", pady=(2, 14))
 
-        self._rotulo(corpo, "Nome do paciente *")
-        ent_nome = self._entrada(corpo, "Nome do paciente")
-        ent_nome.pack(fill="x", pady=(6, 0))
-        ent_nome.insert(0, reg["nome"])
-        err_nome = self._rotulo_erro(corpo)
-
-        self._rotulo(corpo, "Contato (telefone, ramal ou e-mail)")
-        ent_contato = self._entrada(corpo, "Contato")
+        self._rotulo(corpo, "Contato")
+        ent_contato = self._entrada(corpo, "Ex.: (84) 99999-0000")
         ent_contato.pack(fill="x", pady=(6, 0))
         ent_contato.insert(0, reg["contato"] or "")
         err_contato = self._rotulo_erro(corpo)
 
+        self._rotulo(corpo, "Nome *")
+        ent_nome = self._entrada(corpo, "Ex.: Maria da Silva")
+        ent_nome.pack(fill="x", pady=(6, 0))
+        ent_nome.insert(0, reg["nome"])
+        err_nome = self._rotulo_erro(corpo)
+
         self._rotulo(corpo, "Descrição da solicitação *")
+        linha_retorno, ent_retorno, err_retorno = self._campo_retorno(corpo)
+        linha_retorno.pack(side="bottom", fill="x", pady=(0, 2))
+        self._ligar_mascara_data(ent_retorno)
+        ent_retorno.insert(0, formatar_lembrete(reg["lembrete"]))
         err_desc = self._rotulo_erro(corpo, lado="bottom")
         txt_desc = ctk.CTkTextbox(
             corpo, height=110, font=fonte(15), wrap="word",
@@ -102,9 +113,10 @@ class PaginasExtrasMixin:
         txt_desc.insert("1.0", reg["descricao"])
 
         campos = {
-            "nome": (ent_nome, err_nome),
             "contato": (ent_contato, err_contato),
+            "nome": (ent_nome, err_nome),
             "descricao": (txt_desc, err_desc),
+            "retorno": (ent_retorno, err_retorno),
         }
 
         def limpar_erro(campo, rotulo):
@@ -119,13 +131,21 @@ class PaginasExtrasMixin:
             contato = ent_contato.get().strip()
             descricao = txt_desc.get("1.0", "end").strip()
             erros = validar_campos(nome, contato, descricao)
+            lembrete = None
+            try:
+                # mantém a data já gravada, mesmo se ela já passou; novas datas não podem ser passadas
+                texto_data = ent_retorno.get().strip()
+                lembrete = interpretar_data(
+                    texto_data, permitir_passado=(texto_data == formatar_lembrete(reg["lembrete"])))
+            except ValueError as exc:
+                erros["retorno"] = str(exc)
             for chave, (campo, rotulo) in campos.items():
                 campo.configure(border_color=T.VERMELHO if chave in erros else T.BORDA)
                 rotulo.configure(text=erros.get(chave, ""))
             if erros:
                 return
             try:
-                alterado = self.db.atualizar(reg["id"], nome, contato, descricao)
+                alterado = self.db.atualizar(reg["id"], nome, contato, descricao, lembrete)
             except Exception as exc:
                 err_desc.configure(text=f"Não foi possível salvar: {exc}")
                 return
@@ -150,7 +170,7 @@ class PaginasExtrasMixin:
         ).pack(side="left", padx=12)
 
         janela.bind("<Control-s>", lambda _e: salvar())
-        tornar_modal(janela, self, foco=ent_nome)
+        tornar_modal(janela, self, foco=ent_contato)
 
     # ==================================================================
     # Página: Lixeira
@@ -195,7 +215,7 @@ class PaginasExtrasMixin:
 
         self.tabela_lixeira = TabelaRegistros(
             card,
-            [("excluido", "Excluído em", 150, False), ("nome", "Paciente", 210, False),
+            [("excluido", "Excluído em", 150, False), ("nome", "Nome", 210, False),
              ("contato", "Contato", 170, False), ("descricao", "Descrição", 330, True),
              ("status", "Status", 110, False)],
             self._px, ao_selecionar=self._atualizar_rodape_lixeira,
