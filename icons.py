@@ -131,6 +131,19 @@ def _download(d, c):
     _linha(d, [(10, 53), (54, 53)], c, 6)
 
 
+def _cloud(d, c):
+    # nuvem cheia com uma seta para cima recortada (sincronizar)
+    d.ellipse(_caixa(6, 28, 30, 52), fill=c)
+    d.ellipse(_caixa(17, 10, 47, 40), fill=c)
+    d.ellipse(_caixa(34, 22, 58, 52), fill=c)
+    d.rounded_rectangle(_caixa(18, 34, 46, 52), radius=_s(2), fill=c)
+    vazio = (0, 0, 0, 0)
+    pts = [(32, 25), (32, 45)]
+    d.line([(_s(x), _s(y)) for x, y in pts], fill=vazio, width=_s(4.5))
+    d.line([(_s(25), _s(32)), (_s(32), _s(25)), (_s(39), _s(32))], fill=vazio,
+           width=_s(4.5), joint="curve")
+
+
 def _moon(d, c):
     # lua crescente: círculo menos um círculo deslocado (apagado com transparência)
     d.ellipse(_caixa(10, 8, 54, 52), fill=c)
@@ -148,6 +161,7 @@ def _sun(d, c):
 
 _DESENHOS = {
     "moon": _moon,
+    "cloud": _cloud,
     "sun": _sun,
     "download": _download,
     "edit": _edit,

@@ -40,6 +40,7 @@ from atalhos import AtalhosMixin
 from atualizacao import AtualizacaoMixin
 from exportacao import ExportacaoMixin
 from icons import icone
+from nuvem_gui import NuvemMixin
 from paginas import PaginasExtrasMixin
 from preferencias import Preferencias
 from resumo import ResumoMixin
@@ -76,6 +77,7 @@ PAG_NOVO = "novo"
 PAG_HIST = "historico"
 PAG_LIXO = "lixeira"
 PAG_BACKUP = "backup"
+PAG_NUVEM = "nuvem"
 
 # Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
 LARGURA_BASE, ALTURA_BASE = 1240, 780
@@ -114,7 +116,7 @@ COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "r
 
 
 class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
-          PaginasExtrasMixin, ctk.CTk):
+          NuvemMixin, PaginasExtrasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -181,6 +183,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
+        self._iniciar_nuvem()
         self._construir_interface()
         self._restaurar_filtros()
         self._iniciar_atalhos()
@@ -440,6 +443,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             (PAG_HIST, "Histórico", "list"),
             (PAG_LIXO, "Lixeira", "trash"),
             (PAG_BACKUP, "Backup", "database"),
+            (PAG_NUVEM, "Nuvem", "cloud"),
         ):
             item = ItemNavegacao(barra, texto, nome_icone,
                                  lambda c=chave: self.mostrar_pagina(c))
@@ -487,7 +491,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         altura = getattr(evento, "height", 0) if evento is not None else 0
         if altura:
             logico = altura / (self._dpi * self._fator_escala)
-            nivel = 2 if logico >= 690 else 1 if logico >= 610 else 0
+            # (um item a mais no menu desde a v2.6: +46 px)
+            nivel = 2 if logico >= 736 else 1 if logico >= 656 else 0
         else:
             nivel = 2
         if nivel == self._rodape_nivel:
@@ -533,6 +538,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             PAG_HIST: self._criar_pagina_historico(self.area),
             PAG_LIXO: self._criar_pagina_lixeira(self.area),
             PAG_BACKUP: self._criar_pagina_backup(self.area),
+            PAG_NUVEM: self._criar_pagina_nuvem(self.area),
         }
         self.toast = Notificacao(self.area)
 
@@ -552,6 +558,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.atualizar_lixeira()
         elif chave == PAG_BACKUP:
             self.atualizar_backups()
+        elif chave == PAG_NUVEM:
+            self.atualizar_nuvem()
         else:
             self.ent_contato.focus_set()
 
@@ -1441,6 +1449,11 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.db.backup_automatico(sobrescrever=True)
         except Exception:
             pass  # não impede o programa de fechar
+        try:
+            self.withdraw()               # some da tela enquanto envia o que faltar
+            self._sincronizar_ao_fechar()
+        except Exception:
+            pass
         self.destroy()
 
     def _erro_inesperado(self, exc, valor, tb) -> None:

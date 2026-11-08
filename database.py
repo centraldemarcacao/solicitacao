@@ -20,7 +20,8 @@ import os
 import sqlite3
 import sys
 import unicodedata
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
@@ -71,7 +72,62 @@ COLUNAS_NOVAS = {
     "excluido_em": "TEXT",
     "lembrete": "TEXT",
     "prioridade": "TEXT NOT NULL DEFAULT 'Normal'",
+    # Sincronização com a nuvem (v2.6): identificador global, data da última
+    # alteração (UTC) e marca "ainda não enviado".
+    "uuid": "TEXT",
+    "atualizado_em": "TEXT",
+    "sujo": "INTEGER NOT NULL DEFAULT 1",
 }
+
+# Tabelas e gatilhos de sincronização. Os gatilhos marcam automaticamente
+# qualquer inserção, edição ou exclusão, sem depender de cada trecho do programa.
+_AGORA_UTC_SQL = "strftime('%Y-%m-%d %H:%M:%f', 'now')"
+SYNC_SQL = f"""
+CREATE TABLE IF NOT EXISTS meta (
+    chave TEXT PRIMARY KEY,
+    valor TEXT
+);
+CREATE TABLE IF NOT EXISTS remocoes (
+    uuid          TEXT PRIMARY KEY,
+    atualizado_em TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_solicitacoes_uuid
+    ON solicitacoes (uuid);
+
+CREATE TRIGGER IF NOT EXISTS trg_sync_inserir
+AFTER INSERT ON solicitacoes
+WHEN NEW.uuid IS NULL
+BEGIN
+    UPDATE solicitacoes
+       SET uuid = lower(hex(randomblob(16))),
+           atualizado_em = {_AGORA_UTC_SQL},
+           sujo = 1
+     WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_sync_alterar
+AFTER UPDATE OF data_hora, nome_paciente, contato, descricao, status,
+                editado_em, excluido_em, lembrete, prioridade
+ON solicitacoes
+WHEN NEW.atualizado_em IS OLD.atualizado_em AND NEW.sujo IS OLD.sujo
+BEGIN
+    UPDATE solicitacoes
+       SET atualizado_em = {_AGORA_UTC_SQL}, sujo = 1
+     WHERE id = NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_sync_apagar
+AFTER DELETE ON solicitacoes
+WHEN OLD.uuid IS NOT NULL
+BEGIN
+    INSERT OR REPLACE INTO remocoes (uuid, atualizado_em)
+    VALUES (OLD.uuid, {_AGORA_UTC_SQL});
+END;
+"""
+
+# Campos que viajam para a nuvem (nesta ordem)
+SYNC_CAMPOS = ("uuid", "data_hora", "nome_paciente", "contato", "descricao", "status",
+               "lembrete", "prioridade", "editado_em", "excluido_em", "atualizado_em")
 
 # Tipo auxiliar: (id, data_hora, nome, contato, descricao, status, lembrete, prioridade)
 Registro = Tuple[int, str, str, str, str, str, Optional[str], str]
@@ -84,6 +140,13 @@ _MANTER = object()   # 'não altere o lembrete' (diferente de None = remover)
 # ----------------------------------------------------------------------
 def agora() -> str:
     return datetime.now().strftime(FORMATO_DATA)
+
+
+def agora_utc() -> str:
+    """Instante atual em UTC, com milissegundos ('AAAA-MM-DD HH:MM:SS.mmm').
+    Mesmo formato do que os gatilhos de sincronização gravam."""
+    t = datetime.now(timezone.utc)
+    return t.strftime("%Y-%m-%d %H:%M:%S.") + f"{t.microsecond // 1000:03d}"
 
 
 def normalizar(texto) -> str:
@@ -211,6 +274,15 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_solicitacoes_lembrete "
                 "ON solicitacoes (lembrete)"
             )
+            # Registros antigos (ou de backups antigos) ganham identificador
+            # e entram na fila de envio.
+            conn.execute("UPDATE solicitacoes SET atualizado_em = ? "
+                         "WHERE atualizado_em IS NULL", (agora_utc(),))
+            for (rid,) in conn.execute(
+                    "SELECT id FROM solicitacoes WHERE uuid IS NULL").fetchall():
+                conn.execute("UPDATE solicitacoes SET uuid = ? WHERE id = ?",
+                             (uuid.uuid4().hex, rid))
+            conn.executescript(SYNC_SQL)
             conn.commit()
         finally:
             conn.close()
@@ -657,4 +729,141 @@ class Database:
             origem.close()
             destino.close()
         self._inicializar()  # backups antigos podem não ter as colunas novas
+        self.sync_pos_restauracao()
         return seguranca
+
+    # ------------------------------------------------------------------
+    # Sincronização com a nuvem (usado por sincronizacao.py)
+    # ------------------------------------------------------------------
+    def sync_pendentes(self, limite: Optional[int] = None) -> List[dict]:
+        """Registros alterados que ainda não foram enviados (inclui a lixeira)."""
+        linhas = self._consultar(
+            f"SELECT {', '.join(SYNC_CAMPOS)} FROM solicitacoes "
+            "WHERE sujo = 1 AND uuid IS NOT NULL ORDER BY atualizado_em, id LIMIT ?",
+            (-1 if limite is None else int(limite),),
+        )
+        return [dict(zip(SYNC_CAMPOS, linha)) for linha in linhas]
+
+    def sync_remocoes(self, limite: Optional[int] = None) -> List[Tuple[str, str]]:
+        """Exclusões definitivas ainda não comunicadas: [(uuid, atualizado_em)]."""
+        return [tuple(l) for l in self._consultar(
+            "SELECT uuid, atualizado_em FROM remocoes ORDER BY atualizado_em LIMIT ?",
+            (-1 if limite is None else int(limite),))]
+
+    def sync_contar_pendentes(self) -> int:
+        return int(self._consultar(
+            "SELECT (SELECT COUNT(*) FROM solicitacoes WHERE sujo = 1) "
+            "     + (SELECT COUNT(*) FROM remocoes)")[0][0])
+
+    def sync_confirmar_envio(self, itens: Iterable[Tuple[str, str]]) -> None:
+        """Marca como enviados os (uuid, atualizado_em) informados. Se o registro
+        mudou durante o envio, ele continua pendente."""
+        conn = self._conectar()
+        try:
+            conn.executemany(
+                "UPDATE solicitacoes SET sujo = 0 WHERE uuid = ? AND atualizado_em = ?",
+                [tuple(i) for i in itens])
+            conn.commit()
+        finally:
+            conn.close()
+
+    def sync_confirmar_remocoes(self, itens: Iterable[Tuple[str, str]]) -> None:
+        conn = self._conectar()
+        try:
+            conn.executemany(
+                "DELETE FROM remocoes WHERE uuid = ? AND atualizado_em = ?",
+                [tuple(i) for i in itens])
+            conn.commit()
+        finally:
+            conn.close()
+
+    def sync_cursor(self) -> Optional[str]:
+        linhas = self._consultar("SELECT valor FROM meta WHERE chave = 'cursor_nuvem'")
+        return linhas[0][0] if linhas else None
+
+    def sync_definir_cursor(self, valor: Optional[str]) -> None:
+        if valor is None:
+            self._executar("DELETE FROM meta WHERE chave = 'cursor_nuvem'")
+        else:
+            self._executar("INSERT OR REPLACE INTO meta (chave, valor) "
+                           "VALUES ('cursor_nuvem', ?)", (valor,))
+
+    def sync_aplicar_remoto(self, r: dict) -> str:
+        """Aplica uma linha vinda da nuvem. Vale a alteração mais recente.
+
+        `r`: uuid, atualizado_em (formato UTC local), apagado, data_hora, nome,
+        contato, descricao, status, lembrete, prioridade, editado_em, excluido_em.
+        Retorna 'novo', 'atualizado', 'removido' ou 'ignorado'.
+        """
+        u, ts = r["uuid"], r["atualizado_em"]
+        conn = self._conectar()
+        try:
+            atual = conn.execute(
+                "SELECT id, atualizado_em FROM solicitacoes WHERE uuid = ?", (u,)
+            ).fetchone()
+            rem = conn.execute(
+                "SELECT atualizado_em FROM remocoes WHERE uuid = ?", (u,)).fetchone()
+            if rem and rem[0] >= ts:
+                return "ignorado"          # eu apaguei depois: a exclusão vence
+            if atual and (atual[1] or "") >= ts:
+                return "ignorado"          # a versão local é igual ou mais nova
+            if r.get("apagado"):
+                resultado = "ignorado"
+                if atual:
+                    conn.execute("DELETE FROM solicitacoes WHERE id = ?", (atual[0],))
+                    resultado = "removido"
+                conn.execute("DELETE FROM remocoes WHERE uuid = ?", (u,))
+                conn.commit()
+                return resultado
+            valores = (r["data_hora"], r["nome"], r.get("contato") or "", r["descricao"],
+                       r["status"], r.get("lembrete"), r.get("prioridade") or "Normal",
+                       r.get("editado_em"), r.get("excluido_em"), ts)
+            if atual:
+                conn.execute(
+                    "UPDATE solicitacoes SET data_hora = ?, nome_paciente = ?, contato = ?, "
+                    "descricao = ?, status = ?, lembrete = ?, prioridade = ?, "
+                    "editado_em = ?, excluido_em = ?, atualizado_em = ?, sujo = 0 "
+                    "WHERE id = ?", valores + (atual[0],))
+                resultado = "atualizado"
+            else:
+                conn.execute(
+                    "INSERT INTO solicitacoes (data_hora, nome_paciente, contato, "
+                    "descricao, status, lembrete, prioridade, editado_em, excluido_em, "
+                    "atualizado_em, uuid, sujo) VALUES (?,?,?,?,?,?,?,?,?,?,?,0)",
+                    valores + (u,))
+                resultado = "novo"
+            conn.execute("DELETE FROM remocoes WHERE uuid = ?", (u,))
+            conn.commit()
+            return resultado
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def sync_resetar(self) -> None:
+        """Ao desconectar: esquece o ponto de sincronização e marca tudo como
+        pendente, para que uma nova conexão (talvez em outra conta) envie tudo."""
+        conn = self._conectar()
+        try:
+            conn.execute("UPDATE solicitacoes SET sujo = 1")
+            conn.execute("DELETE FROM remocoes")
+            conn.execute("DELETE FROM meta WHERE chave = 'cursor_nuvem'")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def sync_pos_restauracao(self) -> None:
+        """Depois de restaurar um backup, o que está aqui passa a valer: todos os
+        registros são reenviados como 'mais novos' e o que estava só na nuvem
+        não volta sozinho."""
+        agora = agora_utc()
+        conn = self._conectar()
+        try:
+            conn.execute("UPDATE solicitacoes SET sujo = 1, atualizado_em = ?", (agora,))
+            conn.execute("DELETE FROM remocoes")
+            conn.execute("INSERT OR REPLACE INTO meta (chave, valor) "
+                         "VALUES ('cursor_nuvem', ?)", (agora,))
+            conn.commit()
+        finally:
+            conn.close()

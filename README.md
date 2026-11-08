@@ -16,6 +16,21 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Novidades da versão 2.6 — Nuvem (Supabase)
+
+* Nova página **Nuvem** no menu: mantém uma cópia dos registros no seu projeto do
+  Supabase (plano gratuito). O banco local continua sendo o principal: sem internet
+  o programa funciona normalmente e envia o que ficou pendente depois.
+* Sincroniza sozinho ao abrir, a cada poucos minutos e ao fechar. Em conflito vale a
+  alteração mais recente. Lixeira, restauração e exclusão definitiva também viajam
+  (na exclusão definitiva, o texto do paciente é apagado da nuvem).
+* Segurança: a conexão usa login (e-mail e senha, que **não ficam salvos**) e a tabela
+  só libera linhas para a sua conta (RLS). Chaves secretas são recusadas.
+  O arquivo `dados/nuvem.json` (nunca vai para o GitHub) guarda só o endereço, a chave
+  pública e o token da sessão.
+* Configuração: veja `PASSO_A_PASSO_NUVEM.md`. O SQL está em `supabase_setup.sql` e no botão
+  "Copiar SQL de configuração" da página.
+
 ## Correções da versão 2.5.2
 
 * **Troca de tema:** trocar várias vezes seguidas podia deixar a janela vazia. Agora a troca espera o clique terminar, ignora cliques repetidos enquanto acontece e, se algo falhar, volta ao tema claro e avisa (detalhes em `dados/erros.log`).
@@ -88,6 +103,8 @@ anotacoes_hospitalares/
 ├── atalhos.py         # Atalhos de teclado e Desfazer
 ├── preferencias.py    # Preferências (tema, janela, filtros)
 ├── test_tema.py       # Contraste dos dois temas
+├── test_nuvem.py      # Sincronização com o Supabase (servidor simulado)
+├── nuvem.py, nuvem_gui.py, nuvem_sql.py, sincronizacao.py, supabase_setup.sql  # Nuvem
 ├── test_preferencias.py
 ├── exportar.py        # CSV e página de impressão
 ├── exportacao.py      # Botão Exportar (telas)
@@ -129,7 +146,7 @@ python main.py
 Testes do banco de dados:
 
 ```bash
-python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema -v
+python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema test_nuvem -v
 ```
 
 ## 3. Gerar o executável (.exe)
