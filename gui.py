@@ -127,7 +127,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self._dpi = self._detectar_dpi()
         self._fator_escala = self._ajustar_escala_a_tela()
 
-        self.title(f"{T.NOME_INSTITUICAO} — Solicitações de pacientes")
+        self.title(f"{T.NOME_INSTITUICAO} — {T.SUBTITULO}")
         self.geometry(f"{LARGURA_BASE}x{ALTURA_BASE}")
         self.minsize(MINIMO_LARGURA, MINIMO_ALTURA)
         self.configure(fg_color=T.FUNDO)
@@ -423,7 +423,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         )).pack(anchor="w")
         ctk.CTkLabel(
             textos, text=T.SUBTITULO, font=fonte(12),
-            text_color=T.NAV_SUAVE, anchor="w",
+            text_color=T.NAV_SUAVE, anchor="w", wraplength=170,
         ).pack(anchor="w")
 
         ctk.CTkFrame(barra, height=1, fg_color=T.NAV_LINHA, corner_radius=0).pack(

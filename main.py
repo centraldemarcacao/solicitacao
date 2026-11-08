@@ -25,6 +25,8 @@ def _identificar_aplicativo() -> None:
 
 def main() -> None:
     _identificar_aplicativo()
+    import perfil
+    perfil.aplicar()          # nome/subtítulo da empresa (perfil.json ao lado do .exe)
     from gui import App
 
     app = App()

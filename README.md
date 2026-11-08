@@ -16,6 +16,16 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Novidades da versão 2.7 — Perfis por empresa
+
+* O nome e o subtítulo mostrados no programa (barra lateral, título da janela e
+  impressão) vêm do arquivo `perfil.json`, que fica **ao lado do .exe**. Sem o
+  arquivo, continua "Liga Contra o Câncer — Solicitações de pacientes".
+* Cada pasta com o programa tem os seus próprios dados (`dados`) e a sua própria
+  conexão com a nuvem: duas empresas nunca se misturam. A atualização automática
+  troca só o .exe e preserva o `perfil.json`.
+* Modelo pronto: `perfil_intesoftware.json`. Veja `PASSO_A_PASSO_PERFIS.md`.
+
 ## Novidades da versão 2.6 — Nuvem (Supabase)
 
 * Nova página **Nuvem** no menu: mantém uma cópia dos registros no seu projeto do
@@ -103,6 +113,7 @@ anotacoes_hospitalares/
 ├── atalhos.py         # Atalhos de teclado e Desfazer
 ├── preferencias.py    # Preferências (tema, janela, filtros)
 ├── test_tema.py       # Contraste dos dois temas
+├── perfil.py, perfil_intesoftware.json, test_perfil.py  # Perfis por empresa
 ├── test_nuvem.py      # Sincronização com o Supabase (servidor simulado)
 ├── nuvem.py, nuvem_gui.py, nuvem_sql.py, sincronizacao.py, supabase_setup.sql  # Nuvem
 ├── test_preferencias.py
@@ -146,7 +157,7 @@ python main.py
 Testes do banco de dados:
 
 ```bash
-python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema test_nuvem -v
+python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema test_nuvem test_perfil -v
 ```
 
 ## 3. Gerar o executável (.exe)

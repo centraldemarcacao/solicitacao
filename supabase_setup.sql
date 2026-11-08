@@ -1,4 +1,4 @@
--- Solicitações de pacientes: tabela de sincronização (execute uma única vez)
+-- Solicitações (registros de atendimento): tabela de sincronização (execute uma única vez)
 -- Pode ser executado de novo sem problemas.
 
 create table if not exists public.solicitacoes_registros (
