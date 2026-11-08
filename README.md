@@ -16,6 +16,11 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Correções da versão 2.5.1
+
+* **Menu lateral:** os itens ocupavam 200 px de altura cada um e empurravam "Backup" (e o rodapé) para fora da tela. Agora ficam compactos.
+* **Tab no formulário:** a ordem agora é Contato, Nome, Descrição, Retornar em (e depois volta ao Contato). Shift+Tab volta. Vale também na janela de edição.
+
 ## Novidades da versão 2.5
 
 * **Prioridade:** caixa **Urgente** no formulário e na edição. Urgentes aparecem

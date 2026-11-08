@@ -81,7 +81,10 @@ class ItemNavegacao(ctk.CTkFrame):
 
     def __init__(self, pai, texto: str, nome_icone: str, comando) -> None:
         super().__init__(pai, fg_color="transparent", corner_radius=0)
-        self._faixa = ctk.CTkFrame(self, width=4, fg_color="transparent", corner_radius=2)
+        # height=1: sem isso o CustomTkinter pede 200 px de altura e cada item do menu
+        # ocupa a barra inteira (o último item, "Backup", sumia da tela).
+        self._faixa = ctk.CTkFrame(self, width=4, height=1, fg_color="transparent",
+                                   corner_radius=2)
         self._faixa.pack(side="left", fill="y", pady=4)
         self._botao = ctk.CTkButton(
             self, text=texto, image=icone(nome_icone, T.NAV_TEXTO, 20),
@@ -110,7 +113,7 @@ class CartaoNumero(ctk.CTkFrame):
             pai, fg_color=T.CARD, corner_radius=14,
             border_width=1, border_color=T.BORDA,
         )
-        ctk.CTkFrame(self, width=6, fg_color=cor, corner_radius=3).pack(
+        ctk.CTkFrame(self, width=6, height=1, fg_color=cor, corner_radius=3).pack(
             side="left", fill="y", padx=(14, 0), pady=16
         )
 

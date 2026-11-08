@@ -130,6 +130,8 @@ class PaginasExtrasMixin:
             campo.configure(border_color=T.BORDA)
             rotulo.configure(text="")
 
+        # Ordem do Tab: Contato > Nome > Descrição > Retornar em
+        self._encadear_tab([ent_contato, ent_nome, txt_desc, ent_retorno])
         for campo, rotulo in campos.values():
             campo.bind("<KeyRelease>", lambda _e, c=campo, r=rotulo: limpar_erro(c, r))
 

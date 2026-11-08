@@ -604,6 +604,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.txt_desc.pack(fill="both", expand=True, pady=(6, 0))
         self._registrar_campo(self.txt_desc, self.err_desc)
         self.txt_desc.bind("<KeyRelease>", lambda _e: self._atualizar_contador())
+        # Ordem do Tab: Contato > Nome > Descrição > Retornar em
+        self._encadear_tab([self.ent_contato, self.ent_nome, self.txt_desc, self.ent_retorno])
 
         ctk.CTkButton(
             botoes, text="Salvar registro", height=48, width=200, corner_radius=10,
@@ -621,6 +623,23 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             botoes, text="Ctrl + S: salvar  •  F1: atalhos", font=fonte(12),
             text_color=T.TEXTO_SUAVE,
         ).pack(side="right")
+
+    @staticmethod
+    def _encadear_tab(campos) -> None:
+        """Define a ordem do Tab / Shift+Tab entre os campos (e volta ao primeiro no fim).
+        Sem isso, o Tk segue a ordem de criação dos widgets, que não é a da tela."""
+        def ir_para(destino):
+            destino.focus_set()
+            return "break"
+        total = len(campos)
+        for i, campo in enumerate(campos):
+            proximo, anterior = campos[(i + 1) % total], campos[(i - 1) % total]
+            campo.bind("<Tab>", lambda _e, d=proximo: ir_para(d))
+            for tecla in ("<Shift-Tab>", "<ISO_Left_Tab>"):
+                try:
+                    campo.bind(tecla, lambda _e, d=anterior: ir_para(d))
+                except Exception:
+                    pass  # nome de tecla não existe neste sistema
 
     @staticmethod
     def _caixa_urgente(pai) -> ctk.CTkCheckBox:
