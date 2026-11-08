@@ -142,7 +142,7 @@ class CaixaBusca(ctk.CTkFrame):
 
     def __init__(self, pai, dica: str, ao_digitar, largura: int = 380) -> None:
         super().__init__(
-            pai, width=largura, height=44, fg_color=T.BRANCO,
+            pai, width=largura, height=44, fg_color=T.SUPERFICIE,
             corner_radius=10, border_width=2, border_color=T.BORDA,
         )
         self.pack_propagate(False)
@@ -150,7 +150,7 @@ class CaixaBusca(ctk.CTkFrame):
             side="left", padx=(14, 4)
         )
         self.entry = ctk.CTkEntry(
-            self, height=38, border_width=0, fg_color=T.BRANCO,
+            self, height=38, border_width=0, fg_color=T.SUPERFICIE,
             text_color=T.TEXTO, placeholder_text=dica,
             placeholder_text_color=T.PLACEHOLDER, font=fonte(14),
         )
@@ -182,26 +182,27 @@ class Pilula(ctk.CTkFrame):
 class Notificacao(ctk.CTkFrame):
     """Aviso temporário na parte inferior da área de conteúdo."""
 
+    # tipo -> (nome da cor no tema, ícone); a cor é lida na hora de mostrar
     ESTILOS = {
-        "sucesso": (T.VERDE, "check_circle"),
-        "erro": (T.VERMELHO, "warning"),
-        "aviso": (T.AMBAR, "warning"),
-        "info": (T.TEAL, "check_circle"),
+        "sucesso": ("VERDE", "check_circle"),
+        "erro": ("VERMELHO", "warning"),
+        "aviso": ("AMBAR", "warning"),
+        "info": ("TEAL", "check_circle"),
     }
 
     def __init__(self, pai) -> None:
         super().__init__(pai, fg_color=T.VERDE, corner_radius=12)
         self._rotulo = ctk.CTkLabel(
-            self, text="", compound="left", text_color=T.BRANCO,
+            self, text="", compound="left", text_color=T.SOBRE_COR,
             font=fonte(14, "bold"),
         )
         self._rotulo.pack(padx=22, pady=13)
         self._tarefa = None
 
     def mostrar(self, mensagem: str, tipo: str = "sucesso", ms: int = 3500) -> None:
-        cor, nome_icone = self.ESTILOS.get(tipo, self.ESTILOS["info"])
-        self.configure(fg_color=cor)
-        self._rotulo.configure(text="  " + mensagem, image=icone(nome_icone, T.BRANCO, 22))
+        nome_cor, nome_icone = self.ESTILOS.get(tipo, self.ESTILOS["info"])
+        self.configure(fg_color=getattr(T, nome_cor))
+        self._rotulo.configure(text="  " + mensagem, image=icone(nome_icone, T.SOBRE_COR, 22))
         self.place(relx=0.5, rely=1.0, anchor="s", y=-28)
         self.lift()
         if self._tarefa is not None:
@@ -227,7 +228,7 @@ class TabelaRegistros(ctk.CTkFrame):
     def __init__(self, pai, colunas, px, ao_selecionar=None, ao_duplo_clique=None,
                  ao_ordenar=None) -> None:
         super().__init__(
-            pai, fg_color=T.BRANCO, corner_radius=0,
+            pai, fg_color=T.SUPERFICIE, corner_radius=0,
             border_width=1, border_color=T.BORDA,
         )
         self._ao_selecionar = ao_selecionar
@@ -251,7 +252,7 @@ class TabelaRegistros(ctk.CTkFrame):
                 self.tree.heading(chave, text=titulo, anchor="w")
             self.tree.column(chave, width=largura, minwidth=90, anchor="w", stretch=estica)
         for tag, fundo in (("pendente", T.AMBAR_CLARO), ("atendida", T.VERDE_CLARO),
-                           ("neutra", T.BRANCO), ("vencida", T.VERMELHO_CLARO),
+                           ("neutra", T.SUPERFICIE), ("vencida", T.VERMELHO_CLARO),
                            ("selecionada", T.SELECAO)):
             self.tree.tag_configure(tag, background=fundo, foreground=T.TEXTO)
 
@@ -264,7 +265,7 @@ class TabelaRegistros(ctk.CTkFrame):
         # Estado vazio (sobreposto à tabela)
         # Cobre só o corpo da tabela (nunca a linha de títulos) e, em janelas
         # baixas, esconde o ícone para o texto não ser cortado.
-        self.vazio = ctk.CTkFrame(self, fg_color=T.BRANCO, corner_radius=0)
+        self.vazio = ctk.CTkFrame(self, fg_color=T.SUPERFICIE, corner_radius=0)
         miolo = ctk.CTkFrame(self.vazio, fg_color="transparent")
         miolo.place(relx=0.5, rely=0.42, anchor="center")
         self._icone_vazio = ctk.CTkLabel(
@@ -291,7 +292,7 @@ class TabelaRegistros(ctk.CTkFrame):
         estilo = ttk.Style()
         estilo.theme_use("clam")
         estilo.configure(
-            "Hosp.Treeview", background=T.BRANCO, fieldbackground=T.BRANCO,
+            "Hosp.Treeview", background=T.SUPERFICIE, fieldbackground=T.SUPERFICIE,
             foreground=T.TEXTO, rowheight=px(40), font=(T.FONTE, -px(14)),
             borderwidth=0,
         )
@@ -391,9 +392,13 @@ class DialogoConfirmacao(ctk.CTkToplevel):
 
     def __init__(self, pai, titulo: str, destaque: str, mensagem: str,
                  texto_confirmar: str = "Excluir", nome_icone: str = "trash",
-                 cor: str = T.VERMELHO, cor_hover: str = T.VERMELHO_HOVER,
-                 cor_clara: str = T.VERMELHO_CLARO) -> None:
-        super().__init__(pai, fg_color=T.BRANCO)
+                 cor: str = None, cor_hover: str = None,
+                 cor_clara: str = None) -> None:
+        # Padrões lidos na hora (o tema pode ter mudado desde a importação)
+        cor = cor or T.VERMELHO
+        cor_hover = cor_hover or T.VERMELHO_HOVER
+        cor_clara = cor_clara or T.VERMELHO_CLARO
+        super().__init__(pai, fg_color=T.CARD)
         self.resultado = False
         self.title(titulo)
         self.resizable(False, False)
@@ -433,7 +438,7 @@ class DialogoConfirmacao(ctk.CTkToplevel):
         ctk.CTkButton(
             botoes, text=texto_confirmar, width=130, height=42,
             font=fonte(14, "bold"), fg_color=cor, hover_color=cor_hover,
-            command=self._confirmar,
+            text_color=T.SOBRE_COR, command=self._confirmar,
         ).pack(side="right")
         self._cancelar_btn = ctk.CTkButton(
             botoes, text="Cancelar", width=130, height=42, font=fonte(14, "bold"),

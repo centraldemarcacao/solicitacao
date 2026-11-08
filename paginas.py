@@ -65,10 +65,10 @@ class PaginasExtrasMixin:
             self.atualizar_tudo()
             return
 
-        janela = ctk.CTkToplevel(self, fg_color=T.BRANCO)
+        janela = ctk.CTkToplevel(self, fg_color=T.CARD)
         janela.title(f"Editar solicitação nº {reg['id']}")
         janela.resizable(False, False)
-        centralizar(janela, self, 640, 720)
+        centralizar(janela, self, 640, 760)
         ctk.CTkFrame(janela, fg_color=T.TEAL, height=6, corner_radius=0).pack(fill="x")
 
         # Botões presos à base: em telas baixas quem encolhe é a descrição.
@@ -92,22 +92,29 @@ class PaginasExtrasMixin:
         ent_contato.insert(0, reg["contato"] or "")
         err_contato = self._rotulo_erro(corpo)
 
-        self._rotulo(corpo, "Nome *")
+        linha_nome = ctk.CTkFrame(corpo, fg_color="transparent")
+        linha_nome.pack(fill="x")
+        self._rotulo(linha_nome, "Nome *", lado="left")
+        chk_urgente = self._caixa_urgente(linha_nome)
+        chk_urgente.pack(side="right")
+        if reg["prioridade"] == "Urgente":
+            chk_urgente.select()
         ent_nome = self._entrada(corpo, "Ex.: Maria da Silva")
         ent_nome.pack(fill="x", pady=(6, 0))
         ent_nome.insert(0, reg["nome"])
         err_nome = self._rotulo_erro(corpo)
 
         self._rotulo(corpo, "Descrição da solicitação *")
-        linha_retorno, ent_retorno, err_retorno = self._campo_retorno(corpo)
-        linha_retorno.pack(side="bottom", fill="x", pady=(0, 2))
+        err_retorno = self._rotulo_erro(corpo, lado="bottom")
+        linha_retorno, ent_retorno = self._campo_retorno(corpo)
+        linha_retorno.pack(side="bottom", fill="x", pady=(0, 0))
         self._ligar_mascara_data(ent_retorno)
         ent_retorno.insert(0, formatar_lembrete(reg["lembrete"]))
         err_desc = self._rotulo_erro(corpo, lado="bottom")
         txt_desc = ctk.CTkTextbox(
             corpo, height=110, font=fonte(15), wrap="word",
             border_width=2, border_color=T.BORDA, corner_radius=10,
-            fg_color=T.BRANCO, text_color=T.TEXTO,
+            fg_color=T.SUPERFICIE, text_color=T.TEXTO,
         )
         txt_desc.pack(fill="both", expand=True, pady=(6, 0))
         txt_desc.insert("1.0", reg["descricao"])
@@ -145,21 +152,28 @@ class PaginasExtrasMixin:
             if erros:
                 return
             try:
-                alterado = self.db.atualizar(reg["id"], nome, contato, descricao, lembrete)
+                prioridade = "Urgente" if chk_urgente.get() else "Normal"
+                alterado = self.db.atualizar(
+                    reg["id"], nome, contato, descricao, lembrete, prioridade)
             except Exception as exc:
                 err_desc.configure(text=f"Não foi possível salvar: {exc}")
                 return
             janela.destroy()
+            if alterado:
+                self.registrar_desfazer("edicao", {
+                    "id": reg["id"], "nome": reg["nome"], "contato": reg["contato"] or "",
+                    "descricao": reg["descricao"], "lembrete": reg["lembrete"],
+                    "prioridade": reg["prioridade"]}, "edição")
             self.atualizar_tudo()
             if alterado:
-                self.toast.mostrar("Registro atualizado com sucesso.", "sucesso")
+                self.toast.mostrar("Registro atualizado. Ctrl + Z desfaz.", "sucesso", 4500)
             else:
                 self.toast.mostrar("Este registro não está mais disponível.", "aviso")
 
         ctk.CTkButton(
             botoes, text="Salvar alterações", height=46, width=190, corner_radius=10,
-            image=icone("check", T.BRANCO, 20), compound="left",
-            font=fonte(15, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER,
+            image=icone("check", T.SOBRE_COR, 20), compound="left",
+            font=fonte(15, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER, text_color=T.SOBRE_COR,
             command=salvar,
         ).pack(side="left")
         ctk.CTkButton(
@@ -188,8 +202,8 @@ class PaginasExtrasMixin:
         barra.pack(fill="x", padx=22, pady=(20, 14))
         ctk.CTkButton(
             barra, text="Restaurar selecionados", height=40, corner_radius=10,
-            image=icone("restore", T.BRANCO, 18), compound="left",
-            font=fonte(13, "bold"), fg_color=T.TEAL, hover_color=T.TEAL_ESCURO,
+            image=icone("restore", T.SOBRE_COR, 18), compound="left",
+            font=fonte(13, "bold"), fg_color=T.TEAL, hover_color=T.TEAL_ESCURO, text_color=T.SOBRE_COR,
             command=self.restaurar_selecionados,
         ).pack(side="left")
         ctk.CTkButton(
@@ -313,8 +327,8 @@ class PaginasExtrasMixin:
         barra.pack(fill="x", padx=22, pady=(20, 14))
         ctk.CTkButton(
             barra, text="Fazer backup agora", height=40, corner_radius=10,
-            image=icone("database", T.BRANCO, 18), compound="left",
-            font=fonte(13, "bold"), fg_color=T.TEAL, hover_color=T.TEAL_ESCURO,
+            image=icone("database", T.SOBRE_COR, 18), compound="left",
+            font=fonte(13, "bold"), fg_color=T.TEAL, hover_color=T.TEAL_ESCURO, text_color=T.SOBRE_COR,
             command=self.fazer_backup_agora,
         ).pack(side="left")
         ctk.CTkButton(

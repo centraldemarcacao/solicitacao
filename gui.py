@@ -15,6 +15,7 @@ Cores, nome da instituição e fonte: veja theme.py.
 """
 
 import os
+import re
 import sys
 import tkinter as tk
 import traceback
@@ -26,6 +27,8 @@ import customtkinter as ctk
 import theme as T
 from database import (
     DIAS_LIXEIRA,
+    PRIORIDADE_NORMAL,
+    PRIORIDADE_URGENTE,
     normalizar,
     MAX_DESCRICAO,
     STATUS_ATENDIDA,
@@ -33,11 +36,16 @@ from database import (
     Database,
     validar_campos,
 )
+from atalhos import AtalhosMixin
 from atualizacao import AtualizacaoMixin
 from exportacao import ExportacaoMixin
 from icons import icone
 from paginas import PaginasExtrasMixin
+from preferencias import Preferencias
+from resumo import ResumoMixin
 from util import (
+    DIAS,
+    MESES,
     cores_status,
     data_curta,
     formatar_data,
@@ -63,6 +71,7 @@ from widgets import (
     tornar_modal,
 )
 
+PAG_RESUMO = "resumo"
 PAG_NOVO = "novo"
 PAG_HIST = "historico"
 PAG_LIXO = "lixeira"
@@ -70,21 +79,17 @@ PAG_BACKUP = "backup"
 
 # Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
 LARGURA_BASE, ALTURA_BASE = 1240, 780
-MINIMO_LARGURA, MINIMO_ALTURA = 1180, 700
+MINIMO_LARGURA, MINIMO_ALTURA = 1200, 700
 
-# rótulo -> (status, somente retornos de hoje/atrasados)
+# rótulo -> (status, somente retornos de hoje/atrasados, somente urgentes)
 FILTROS_STATUS = {
-    "Todos": (None, False),
-    "Pendentes": (STATUS_PENDENTE, False),
-    "Atendidas": (STATUS_ATENDIDA, False),
-    "Retornos": (None, True),
+    "Todos": (None, False, False),
+    "Pendentes": (STATUS_PENDENTE, False, False),
+    "Atendidas": (STATUS_ATENDIDA, False, False),
+    "Retornos": (None, True, False),
+    "Urgentes": (STATUS_PENDENTE, False, True),
 }
 PERIODOS = ("Todo o período", "Hoje", "Últimos 7 dias", "Este mês")
-
-DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
-        "sexta-feira", "sábado", "domingo"]
-MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
-         "agosto", "setembro", "outubro", "novembro", "dezembro"]
 
 
 def localizar_arquivo(nome: str):
@@ -105,7 +110,11 @@ def localizar_arquivo(nome: str):
 # ======================================================================
 # Janela principal
 # ======================================================================
-class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
+COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "retorno", "status")
+
+
+class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
+          PaginasExtrasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -147,6 +156,17 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             self.destroy()
             raise SystemExit(1)
 
+        # Preferências (tema, janela, ordenação e filtros) ficam ao lado do banco.
+        self.prefs = Preferencias(os.path.join(os.path.dirname(self.db.caminho),
+                                               "preferencias.json"))
+        T.aplicar_tema(self.prefs.get("tema", "claro"))
+        self.configure(fg_color=T.FUNDO)
+        self._restaurar_janela()
+        ordem = self.prefs.get("ordem")
+        if (isinstance(ordem, list) and len(ordem) == 2
+                and ordem[0] in COLUNAS_ORDENAVEIS and isinstance(ordem[1], bool)):
+            self._ordem = (ordem[0], ordem[1])
+
         self.report_callback_exception = self._erro_inesperado
         self.protocol("WM_DELETE_WINDOW", self._ao_fechar)
 
@@ -161,24 +181,14 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        self._montar_barra_lateral()
-        self._montar_area()
-
-        self.bind("<Control-s>", lambda _e: self._atalho_salvar())
-        self.mostrar_pagina(PAG_NOVO)
+        self._construir_interface()
+        self._restaurar_filtros()
+        self._iniciar_atalhos()
+        self.mostrar_pagina(PAG_RESUMO if self._ha_algo_para_ver_seguro() else PAG_NOVO)
         self.atualizar_tudo()
         self._atualizar_relogio()
         if aviso_inicial:
             self.toast.mostrar(aviso_inicial, "erro", 8000)
-        else:
-            try:
-                pendentes_retorno = self.db.contar_retornos()
-            except Exception:
-                pendentes_retorno = 0
-            if pendentes_retorno:
-                self.toast.mostrar(
-                    f"Retornos a fazer: {pendentes_retorno} (hoje ou atrasados). "
-                    "Veja em Histórico > Retornos.", "aviso", 9000)
         self._iniciar_atualizacao()
 
     # ==================================================================
@@ -210,12 +220,135 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         return max(1, round(logico * self._dpi * self._fator_escala))
 
     # ==================================================================
+    # Construção da interface, tema e preferências
+    # ==================================================================
+    def _construir_interface(self) -> None:
+        """Monta barra lateral e páginas (também usada ao trocar de tema)."""
+        self._com_erro = set()
+        self._rotulos_erro = {}
+        self._rodape_nivel = None
+        self._montar_barra_lateral()
+        self._montar_area()
+
+    def _ha_algo_para_ver_seguro(self) -> bool:
+        try:
+            return self.ha_algo_para_ver()
+        except Exception:
+            return False
+
+    def _restaurar_janela(self) -> None:
+        """Reabre no tamanho e na posição da última vez (se ainda couberem na tela)."""
+        info = self.prefs.get("janela")
+        if not isinstance(info, dict):
+            return
+        try:
+            largura = int(info["w"])
+            altura = int(info["h"])
+            tela_l = self.winfo_screenwidth() / self._dpi
+            tela_a = self.winfo_screenheight() / self._dpi
+            largura = max(MINIMO_LARGURA, min(largura, int(tela_l)))
+            altura = max(MINIMO_ALTURA, min(altura, int(tela_a)))
+            posicao = ""
+            x, y = info.get("x"), info.get("y")
+            if (isinstance(x, int) and isinstance(y, int)
+                    and -8 <= x <= self.winfo_screenwidth() - 200
+                    and 0 <= y <= self.winfo_screenheight() - 150):
+                posicao = f"+{x}+{y}"
+            self.geometry(f"{largura}x{altura}{posicao}")
+            if info.get("max"):
+                self.after(80, lambda: self.state("zoomed"))
+        except Exception:
+            pass  # preferência inválida: mantém o tamanho padrão
+
+    def _restaurar_filtros(self) -> None:
+        status = self.prefs.get("filtro_status")
+        periodo = self.prefs.get("filtro_periodo")
+        if status in FILTROS_STATUS:
+            self.filtro_status.set(status)
+        if periodo in PERIODOS:
+            self.filtro_periodo.set(periodo)
+        self.tabela.definir_ordenacao(*self._ordem)
+
+    def _salvar_preferencias(self) -> None:
+        """Grava tema, janela, ordenação e filtros (falhas são ignoradas)."""
+        try:
+            maximizada = self.state() == "zoomed"
+            if maximizada:
+                self.state("normal")   # lê o tamanho "normal", não o da tela cheia
+                self.update_idletasks()
+            m = re.match(r"(\d+)x(\d+)([+-]\d+)([+-]\d+)", self.wm_geometry())
+            janela = {"max": maximizada}
+            if m:
+                escala = self._detectar_dpi()
+                janela.update(w=round(int(m.group(1)) / escala),
+                              h=round(int(m.group(2)) / escala),
+                              x=int(m.group(3)), y=int(m.group(4)))
+            self.prefs.definir(
+                tema=T.TEMA_ATUAL, janela=janela, ordem=list(self._ordem),
+                filtro_status=self.filtro_status.get(),
+                filtro_periodo=self.filtro_periodo.get())
+            self.prefs.salvar()
+        except Exception:
+            pass
+
+    def alternar_tema(self) -> None:
+        """Troca entre tema claro e escuro, reconstruindo a interface no lugar."""
+        novo = "escuro" if T.TEMA_ATUAL == "claro" else "claro"
+        estado = self._capturar_estado()
+        tarefa = getattr(self.toast, "_tarefa", None)
+        if tarefa is not None:
+            self.after_cancel(tarefa)
+        self.barra_lateral.destroy()
+        self.area.destroy()
+        T.aplicar_tema(novo)
+        self.configure(fg_color=T.FUNDO)
+        self.prefs.definir(tema=novo)
+        self.prefs.salvar()
+        self._construir_interface()
+        self._restaurar_estado(estado)
+        self.toast.mostrar(f"Tema {novo} ativado.", "info", 2500)
+
+    def _capturar_estado(self) -> dict:
+        """Guarda o que o usuário estava fazendo (página, filtros, formulário)."""
+        pagina = next((k for k, p in self.paginas.items() if p.winfo_ismapped()), PAG_NOVO)
+        return {
+            "pagina": pagina,
+            "busca": self.busca.get(),
+            "status": self.filtro_status.get(),
+            "periodo": self.filtro_periodo.get(),
+            "contato": self.ent_contato.get(),
+            "nome": self.ent_nome.get(),
+            "descricao": self.txt_desc.get("1.0", "end").strip(),
+            "retorno": self.ent_retorno.get(),
+            "urgente": bool(self.chk_urgente.get()),
+        }
+
+    def _restaurar_estado(self, e: dict) -> None:
+        self.filtro_status.set(e["status"])
+        self.filtro_periodo.set(e["periodo"])
+        if e["busca"]:
+            self.busca.entry.insert(0, e["busca"])
+        self.tabela.definir_ordenacao(*self._ordem)
+        for campo, valor in ((self.ent_contato, e["contato"]), (self.ent_nome, e["nome"]),
+                             (self.ent_retorno, e["retorno"])):
+            if valor:
+                campo.insert(0, valor)
+        if e["descricao"]:
+            self.txt_desc.insert("1.0", e["descricao"])
+        if e["urgente"]:
+            self.chk_urgente.select()
+        self._atualizar_contador()
+        self.mostrar_pagina(e["pagina"])
+        self.atualizar_tudo()
+
+    # ==================================================================
     # Barra lateral
     # ==================================================================
     def _montar_barra_lateral(self) -> None:
         barra = ctk.CTkFrame(self, width=272, fg_color=T.NAVY, corner_radius=0)
         barra.grid(row=0, column=0, sticky="nsew")
         barra.pack_propagate(False)
+        self.barra_lateral = barra
 
         # --- Marca ---------------------------------------------------
         marca = ctk.CTkFrame(barra, fg_color="transparent")
@@ -244,6 +377,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
         self.nav = {}
         for chave, texto, nome_icone in (
+            (PAG_RESUMO, "Resumo do dia", "clipboard"),
             (PAG_NOVO, "Novo registro", "plus"),
             (PAG_HIST, "Histórico", "list"),
             (PAG_LIXO, "Lixeira", "trash"),
@@ -261,12 +395,20 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             barra, text=f"Dados salvos neste computador  •  v{T.VERSAO}",
             font=fonte(11), text_color=T.NAV_SUAVE, wraplength=220, anchor="w",
         )
-        self._rodape_botao = ctk.CTkButton(
-            barra, text="Verificar atualizações", height=30, font=fonte(12, "bold"),
-            fg_color="transparent", text_color=T.NAV_TEXTO, border_width=1,
-            border_color=T.NAV_LINHA, hover_color=T.NAVY_HOVER,
-            command=self.verificar_atualizacao_manual,
+        self._rodape_botao = ctk.CTkFrame(barra, fg_color="transparent")
+        self._btn_tema = ctk.CTkButton(
+            self._rodape_botao, text="", width=38, height=30,
+            image=icone("moon" if T.TEMA_ATUAL == "claro" else "sun", T.NAV_TEXTO, 18),
+            fg_color="transparent", border_width=1, border_color=T.NAV_LINHA,
+            hover_color=T.NAVY_HOVER, command=self.alternar_tema,
         )
+        self._btn_tema.pack(side="right", padx=(8, 0))
+        ctk.CTkButton(
+            self._rodape_botao, text="Verificar atualizações", height=30,
+            font=fonte(12, "bold"), fg_color="transparent", text_color=T.NAV_TEXTO,
+            border_width=1, border_color=T.NAV_LINHA, hover_color=T.NAVY_HOVER,
+            command=self.verificar_atualizacao_manual,
+        ).pack(side="left", fill="x", expand=True)
         self._rodape_relogio = ctk.CTkFrame(barra, fg_color=T.NAVY_HOVER, corner_radius=14)
         self.lbl_hora = ctk.CTkLabel(
             self._rodape_relogio, text="--:--", font=fonte(26, "bold"),
@@ -287,7 +429,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         altura = getattr(evento, "height", 0) if evento is not None else 0
         if altura:
             logico = altura / (self._dpi * self._fator_escala)
-            nivel = 2 if logico >= 640 else 1 if logico >= 560 else 0
+            nivel = 2 if logico >= 690 else 1 if logico >= 610 else 0
         else:
             nivel = 2
         if nivel == self._rodape_nivel:
@@ -328,6 +470,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.area.grid(row=0, column=1, sticky="nsew")
 
         self.paginas = {
+            PAG_RESUMO: self._criar_pagina_resumo(self.area),
             PAG_NOVO: self._criar_pagina_novo(self.area),
             PAG_HIST: self._criar_pagina_historico(self.area),
             PAG_LIXO: self._criar_pagina_lixeira(self.area),
@@ -343,7 +486,9 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
                 pagina.pack_forget()
         for k, item in self.nav.items():
             item.marcar(k == chave)
-        if chave == PAG_HIST:
+        if chave == PAG_RESUMO:
+            self.atualizar_resumo()
+        elif chave == PAG_HIST:
             self.atualizar_historico()
         elif chave == PAG_LIXO:
             self.atualizar_lixeira()
@@ -418,8 +563,12 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.err_contato = self._rotulo_erro(f)
         self._registrar_campo(self.ent_contato, self.err_contato)
 
-        # Nome
-        self._rotulo(f, "Nome *")
+        # Nome (e marcação de urgência na mesma linha do rótulo)
+        linha_nome = ctk.CTkFrame(f, fg_color="transparent")
+        linha_nome.pack(fill="x")
+        self._rotulo(linha_nome, "Nome *", lado="left")
+        self.chk_urgente = self._caixa_urgente(linha_nome)
+        self.chk_urgente.pack(side="right")
         self.ent_nome = self._entrada(f, "Ex.: Maria da Silva")
         self.ent_nome.pack(fill="x", pady=(6, 0))
         self.err_nome = self._rotulo_erro(f)
@@ -439,8 +588,10 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         # baixas, quem encolhe é a caixa de texto (e nada some).
         botoes = ctk.CTkFrame(f, fg_color="transparent")
         botoes.pack(side="bottom", fill="x", pady=(6, 0))
-        linha_retorno, self.ent_retorno, self.err_retorno = self._campo_retorno(f)
-        linha_retorno.pack(side="bottom", fill="x", pady=(0, 2))
+        # (de baixo para cima: botões, erro do retorno, linha do retorno, erro da descrição)
+        self.err_retorno = self._rotulo_erro(f, lado="bottom")
+        linha_retorno, self.ent_retorno = self._campo_retorno(f)
+        linha_retorno.pack(side="bottom", fill="x", pady=(0, 0))
         self._registrar_campo(self.ent_retorno, self.err_retorno)
         self._ligar_mascara_data(self.ent_retorno)
         self.err_desc = self._rotulo_erro(f, lado="bottom")
@@ -448,7 +599,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.txt_desc = ctk.CTkTextbox(
             f, height=110, font=fonte(15), wrap="word",
             border_width=2, border_color=T.BORDA, corner_radius=10,
-            fg_color=T.BRANCO, text_color=T.TEXTO,
+            fg_color=T.SUPERFICIE, text_color=T.TEXTO,
         )
         self.txt_desc.pack(fill="both", expand=True, pady=(6, 0))
         self._registrar_campo(self.txt_desc, self.err_desc)
@@ -456,8 +607,8 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
         ctk.CTkButton(
             botoes, text="Salvar registro", height=48, width=200, corner_radius=10,
-            image=icone("check", T.BRANCO, 20), compound="left",
-            font=fonte(16, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER,
+            image=icone("check", T.SOBRE_COR, 20), compound="left",
+            font=fonte(16, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER, text_color=T.SOBRE_COR,
             command=self.salvar_registro,
         ).pack(side="left")
         ctk.CTkButton(
@@ -467,12 +618,21 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             command=self.limpar_formulario,
         ).pack(side="left", padx=12)
         ctk.CTkLabel(
-            botoes, text="Atalho: Ctrl + S", font=fonte(12),
+            botoes, text="Ctrl + S: salvar  •  F1: atalhos", font=fonte(12),
             text_color=T.TEXTO_SUAVE,
         ).pack(side="right")
 
+    @staticmethod
+    def _caixa_urgente(pai) -> ctk.CTkCheckBox:
+        return ctk.CTkCheckBox(
+            pai, text="Urgente", font=fonte(13, "bold"), text_color=T.TEXTO,
+            fg_color=T.VERMELHO, hover_color=T.VERMELHO_HOVER,
+            border_color=T.BORDA_FORTE, checkmark_color=T.SOBRE_COR,
+            checkbox_width=22, checkbox_height=22, corner_radius=6, border_width=2,
+        )
+
     def _campo_retorno(self, pai):
-        """Linha 'Retornar em' (opcional): data, atalhos e mensagem de erro."""
+        """Linha 'Retornar em' (opcional): data e atalhos. Retorna (linha, entrada)."""
         linha = ctk.CTkFrame(pai, fg_color="transparent")
         ctk.CTkLabel(
             linha, text="Retornar em", font=fonte(14, "bold"),
@@ -481,7 +641,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         entrada = ctk.CTkEntry(
             linha, width=130, height=38, font=fonte(14), placeholder_text="dd/mm/aaaa",
             placeholder_text_color=T.PLACEHOLDER, corner_radius=10, border_width=2,
-            border_color=T.BORDA, fg_color=T.BRANCO, text_color=T.TEXTO,
+            border_color=T.BORDA, fg_color=T.SUPERFICIE, text_color=T.TEXTO,
         )
         entrada.pack(side="left")
         for texto, dias in (("Amanhã", 1), ("Em 7 dias", 7)):
@@ -497,11 +657,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             hover_color=T.FUNDO,
             command=lambda e=entrada: self._definir_retorno(e, None),
         ).pack(side="left", padx=(4, 0))
-        erro = ctk.CTkLabel(
-            linha, text="", font=fonte(12, "bold"), text_color=T.VERMELHO, anchor="w",
-        )
-        erro.pack(side="left", padx=(12, 0))
-        return linha, entrada, erro
+        return linha, entrada
 
     @staticmethod
     def _definir_retorno(entrada, dias) -> None:
@@ -540,7 +696,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             pai, height=46, font=fonte(15), placeholder_text=dica,
             placeholder_text_color=T.PLACEHOLDER, corner_radius=10,
             border_width=2, border_color=T.BORDA,
-            fg_color=T.BRANCO, text_color=T.TEXTO,
+            fg_color=T.SUPERFICIE, text_color=T.TEXTO,
         )
 
     @staticmethod
@@ -634,7 +790,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             return
 
         try:
-            self.db.inserir(nome, contato, descricao, lembrete)
+            self.db.inserir(nome, contato, descricao, lembrete, self._prioridade_do_formulario())
         except Exception as exc:
             self.toast.mostrar(f"Não foi possível salvar: {exc}", "erro", 6000)
             return
@@ -644,7 +800,11 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.toast.mostrar("Registro salvo com sucesso.", "sucesso")
         self.ent_contato.focus_set()
 
+    def _prioridade_do_formulario(self) -> str:
+        return PRIORIDADE_URGENTE if self.chk_urgente.get() else PRIORIDADE_NORMAL
+
     def limpar_formulario(self) -> None:
+        self.chk_urgente.deselect()
         self.ent_contato.delete(0, "end")
         self.ent_nome.delete(0, "end")
         self.ent_retorno.delete(0, "end")
@@ -666,6 +826,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.res_pend = self._linha_resumo(r, "Pendentes", T.AMBAR)
         self.res_aten = self._linha_resumo(r, "Atendidas", T.VERDE)
         self.res_retornos = self._linha_resumo(r, "Retornos a fazer", T.VERMELHO)
+        self.res_urgentes = self._linha_resumo(r, "Urgentes pendentes", T.AMBAR)
 
         recentes = self._card(lateral)
         recentes.pack(fill="both", expand=True, pady=(22, 0))
@@ -700,6 +861,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.res_pend.configure(text=str(contagem[STATUS_PENDENTE]))
         self.res_aten.configure(text=str(contagem[STATUS_ATENDIDA]))
         self.res_retornos.configure(text=str(self.db.contar_retornos()))
+        self.res_urgentes.configure(text=str(self.db.contar_urgentes()))
 
         for filho in self.lista_recentes.winfo_children():
             filho.destroy()
@@ -712,7 +874,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             ).pack(anchor="w", pady=10)
             return
 
-        for _rid, data_hora, nome, _contato, descricao, status, _lemb in registros:
+        for _rid, data_hora, nome, _contato, descricao, status, _lemb, _prio in registros:
             fundo, cor_texto = cores_status(status)
             linha = ctk.CTkFrame(self.lista_recentes, fg_color="transparent")
             linha.pack(fill="x", pady=6)
@@ -761,11 +923,11 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         linha1 = ctk.CTkFrame(card, fg_color="transparent")
         linha1.pack(fill="x", padx=22, pady=(20, 12))
         self.busca = CaixaBusca(linha1, "Buscar por nome, contato ou descrição...",
-                                self.atualizar_historico, largura=300)
+                                self.atualizar_historico, largura=250)
         self.busca.pack(side="left")
         self.filtro_status = ctk.CTkSegmentedButton(
             linha1, values=list(FILTROS_STATUS), height=40, font=fonte(12, "bold"),
-            selected_color=T.TEAL, selected_hover_color=T.TEAL_ESCURO,
+            selected_color=T.SEG_SELECIONADO, selected_hover_color=T.SEG_SELECIONADO,
             unselected_color=T.TEAL_CLARO, unselected_hover_color=T.TEAL_BORDA,
             text_color=T.TEXTO, fg_color=T.TEAL_CLARO,
             command=lambda _valor: self.atualizar_historico(),
@@ -773,10 +935,10 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.filtro_status.set("Todos")
         self.filtro_status.pack(side="right")
         self.filtro_periodo = ctk.CTkOptionMenu(
-            linha1, values=list(PERIODOS), width=150, height=40, font=fonte(13),
+            linha1, values=list(PERIODOS), width=140, height=40, font=fonte(13),
             dropdown_font=fonte(13), fg_color=T.TEAL_CLARO, text_color=T.TEXTO,
             button_color=T.TEAL, button_hover_color=T.TEAL_ESCURO,
-            dropdown_fg_color=T.BRANCO, dropdown_text_color=T.TEXTO,
+            dropdown_fg_color=T.SUPERFICIE, dropdown_text_color=T.TEXTO,
             dropdown_hover_color=T.TEAL_CLARO,
             command=lambda _valor: self.atualizar_historico(),
         )
@@ -804,14 +966,14 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.btn_exportar.pack(side="right", padx=(0, 8))
         ctk.CTkButton(
             linha2, text="Atendida", height=40, width=118, corner_radius=10,
-            image=icone("check", T.BRANCO, 18), compound="left",
-            font=fonte(13, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER,
+            image=icone("check", T.SOBRE_COR, 18), compound="left",
+            font=fonte(13, "bold"), fg_color=T.VERDE, hover_color=T.VERDE_HOVER, text_color=T.SOBRE_COR,
             command=lambda: self.alterar_status(STATUS_ATENDIDA),
         ).pack(side="left")
         ctk.CTkButton(
             linha2, text="Pendente", height=40, width=118, corner_radius=10,
-            image=icone("clock", T.BRANCO, 18), compound="left",
-            font=fonte(13, "bold"), fg_color=T.AMBAR, hover_color=T.AMBAR_HOVER,
+            image=icone("clock", T.SOBRE_COR, 18), compound="left",
+            font=fonte(13, "bold"), fg_color=T.AMBAR, hover_color=T.AMBAR_HOVER, text_color=T.SOBRE_COR,
             command=lambda: self.alterar_status(STATUS_PENDENTE),
         ).pack(side="left", padx=(8, 0))
         ctk.CTkButton(
@@ -845,9 +1007,10 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
         self.tabela = TabelaRegistros(
             card,
-            [("data_hora", "Data/Hora", 135, False), ("nome", "Nome", 170, False),
+            [("urgente", "Urg.", 50, False), ("data_hora", "Data/Hora", 135, False),
+             ("nome", "Nome", 160, False),
              ("contato", "Contato", 130, False), ("descricao", "Descrição", 220, True),
-             ("retorno", "Retorno", 125, False), ("status", "Status", 95, False)],
+             ("retorno", "Retorno", 120, False), ("status", "Status", 95, False)],
             self._px,
             ao_selecionar=self._atualizar_rodape,
             ao_duplo_clique=lambda _iid: self.ver_detalhes(),
@@ -894,7 +1057,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         if coluna == atual:
             decrescente = not decrescente
         else:
-            decrescente = coluna == "data_hora"   # datas: mais recentes primeiro
+            decrescente = coluna in ("data_hora", "urgente")   # recentes / urgentes primeiro
         self._ordem = (coluna, decrescente)
         self.atualizar_historico()
 
@@ -904,23 +1067,26 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             com = sorted((r for r in registros if r[6]), key=lambda r: r[6], reverse=decrescente)
             return com + [r for r in registros if not r[6]]
         chaves = {
-            "data_hora": lambda r: r[1], "nome": lambda r: normalizar(r[2]),
+            "data_hora": lambda r: r[1], "urgente": lambda r: r[7] == PRIORIDADE_URGENTE,
+            "nome": lambda r: normalizar(r[2]),
             "contato": lambda r: normalizar(r[3]),
             "descricao": lambda r: normalizar(r[4]), "status": lambda r: r[5],
         }
         return sorted(registros, key=chaves[coluna], reverse=decrescente)
 
     def _filtros_atuais(self):
-        """(texto, status, só retornos, data inicial) escolhidos na tela."""
-        status, so_retornos = FILTROS_STATUS[self.filtro_status.get()]
+        """(texto, status, só retornos, data inicial, só urgentes) escolhidos na tela."""
+        status, so_retornos, so_urgentes = FILTROS_STATUS[self.filtro_status.get()]
         return (self.busca.get(), status, so_retornos,
-                inicio_do_periodo(self.filtro_periodo.get()))
+                inicio_do_periodo(self.filtro_periodo.get()), so_urgentes)
 
     def _descricao_filtro(self) -> str:
-        texto, status, so_retornos, desde = self._filtros_atuais()
+        texto, status, so_retornos, _desde, so_urgentes = self._filtros_atuais()
         partes = [self.filtro_periodo.get()]
         if so_retornos:
             partes.append("retornos de hoje ou atrasados")
+        elif so_urgentes:
+            partes.append("urgentes pendentes")
         elif status:
             partes.append(status.lower() + "s")
         if texto:
@@ -931,21 +1097,23 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         if not hasattr(self, "tabela"):
             return  # interface ainda em construção
 
-        texto, status, so_retornos, desde = self._filtros_atuais()
+        texto, status, so_retornos, desde, so_urgentes = self._filtros_atuais()
         registros = self._ordenar_registros(
-            self.db.listar(texto, status, desde=desde, so_retornos=so_retornos))
+            self.db.listar(texto, status, desde=desde, so_retornos=so_retornos,
+                           so_urgentes=so_urgentes))
         self._registros_exibidos = registros
 
         self.tabela.preencher([
-            (str(rid), (formatar_data(data_hora), nome, contato,
+            (str(rid), ("URG" if prio == PRIORIDADE_URGENTE else "",
+                        formatar_data(data_hora), nome, contato,
                         " ".join(descricao.split()), rotulo_retorno(lemb, st), st),
              self._tag_registro(st, lemb))
-            for rid, data_hora, nome, contato, descricao, st, lemb in registros
+            for rid, data_hora, nome, contato, descricao, st, lemb, prio in registros
         ])
         self.tabela.definir_ordenacao(*self._ordem)
 
         self._total_exibido = len(registros)
-        filtrando = texto or status or so_retornos or desde
+        filtrando = texto or status or so_retornos or desde or so_urgentes
         if registros:
             self.tabela.esconder_vazio()
         elif filtrando:
@@ -985,12 +1153,22 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         self.atualizar_historico()
         self.atualizar_lateral()
         self.atualizar_lixeira()
+        self.atualizar_resumo()
 
     # --- Ações sobre registros ------------------------------------------
     def _ids_selecionados(self) -> list:
         return [int(i) for i in self.tabela.selecionados()]
 
     def _definir_status(self, ids: list, novo_status: str) -> None:
+        anteriores = {}
+        for rid in ids:
+            antigo = self.db.obter(rid)
+            if antigo:
+                anteriores[rid] = antigo[5]
+        if anteriores:
+            self.registrar_desfazer(
+                "status", anteriores,
+                "mudança de status" if len(anteriores) == 1 else "mudança de status em lote")
         for rid in ids:
             self.db.atualizar_status(rid, novo_status)
         self.atualizar_tudo()
@@ -1041,11 +1219,11 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             self.toast.mostrar(f"Não foi possível excluir: {exc}", "erro", 6000)
             return
 
+        self.registrar_desfazer("excluir", ids, "exclusão")
         self.atualizar_tudo()
         self.toast.mostrar(
-            f"{plural(movidos, 'registro movido', 'registros movidos')} para a lixeira.",
-            "aviso",
-        )
+            f"{plural(movidos, 'registro movido', 'registros movidos')} para a lixeira. "
+            "Ctrl + Z desfaz.", "aviso", 5000)
 
     def _abrir_menu_contexto(self, evento) -> None:
         arvore = self.tabela.tree
@@ -1070,8 +1248,8 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         return f"{data} (hoje)" if situacao == "hoje" else data
 
     # --- Janela de detalhes ---------------------------------------------
-    def ver_detalhes(self) -> None:
-        ids = self._ids_selecionados()
+    def ver_detalhes(self, registro_id=None) -> None:
+        ids = [registro_id] if registro_id else self._ids_selecionados()
         if not ids:
             self.toast.mostrar("Selecione um registro para ver os detalhes.", "aviso")
             return
@@ -1091,6 +1269,9 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         interno.pack(fill="x", padx=28, pady=(22, 20))
         fundo, cor_texto = cores_status(status)
         Pilula(interno, status, fundo, cor_texto).pack(side="right", anchor="n")
+        if reg["prioridade"] == PRIORIDADE_URGENTE:
+            Pilula(interno, "Urgente", T.VERMELHO_CLARO, T.VERMELHO).pack(
+                side="right", anchor="n", padx=(0, 8))
         alinhar_esquerda(ctk.CTkLabel(
             interno, text=reg["nome"], font=fonte(22, "bold"), text_color=T.BRANCO,
             anchor="w", wraplength=440,
@@ -1132,7 +1313,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
             ).pack(side="right")
 
         caixa = ctk.CTkTextbox(
-            janela, font=fonte(15), fg_color=T.BRANCO, text_color=T.TEXTO,
+            janela, font=fonte(15), fg_color=T.SUPERFICIE, text_color=T.TEXTO,
             border_width=1, border_color=T.BORDA, corner_radius=10, wrap="word",
         )
         caixa.pack(fill="both", expand=True, padx=28, pady=(0, 16))
@@ -1143,9 +1324,9 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
         ctk.CTkButton(
             botoes, height=42, corner_radius=10, font=fonte(14, "bold"),
             text="Marcar como pendente" if novo == STATUS_PENDENTE else "Marcar como atendida",
-            image=icone("clock" if novo == STATUS_PENDENTE else "check", T.BRANCO, 18),
+            image=icone("clock" if novo == STATUS_PENDENTE else "check", T.SOBRE_COR, 18),
             compound="left",
-            fg_color=T.AMBAR if novo == STATUS_PENDENTE else T.VERDE,
+            fg_color=T.AMBAR if novo == STATUS_PENDENTE else T.VERDE, text_color=T.SOBRE_COR,
             hover_color=T.AMBAR_HOVER if novo == STATUS_PENDENTE else T.VERDE_HOVER,
             command=lambda: (janela.destroy(), self._definir_status([rid], novo)),
         ).pack(side="left")
@@ -1178,6 +1359,7 @@ class App(ExportacaoMixin, AtualizacaoMixin, PaginasExtrasMixin, ctk.CTk):
 
     def _ao_fechar(self) -> None:
         """Ao fechar a janela, atualiza o backup do dia."""
+        self._salvar_preferencias()
         try:
             self.db.backup_automatico(sobrescrever=True)
         except Exception:

@@ -14,13 +14,14 @@ from datetime import datetime
 import theme as T
 from util import formatar_data, formatar_lembrete, plural
 
-CABECALHO = ("Nº", "Data/Hora", "Nome", "Contato", "Descrição", "Status", "Retorno")
+CABECALHO = ("Nº", "Data/Hora", "Nome", "Contato", "Descrição", "Status", "Retorno",
+             "Prioridade")
 
 
 def _linha(reg) -> tuple:
-    rid, data_hora, nome, contato, descricao, status, lembrete = reg
+    rid, data_hora, nome, contato, descricao, status, lembrete, prioridade = reg
     return (rid, formatar_data(data_hora), nome, contato or "", descricao,
-            status, formatar_lembrete(lembrete))
+            status, formatar_lembrete(lembrete), prioridade)
 
 
 def _seguro_para_planilha(valor):
@@ -53,7 +54,7 @@ th{background:#0B2A43;color:#fff;text-align:left;padding:7px 8px}
 td{border-bottom:1px solid #D3DEE6;padding:7px 8px;vertical-align:top}
 td.desc{white-space:pre-wrap}
 tr{page-break-inside:avoid}
-.pendente{color:#B45309;font-weight:600}.atendida{color:#17744E;font-weight:600}
+.urgente{color:#B42318;font-weight:700}.pendente{color:#B45309;font-weight:600}.atendida{color:#17744E;font-weight:600}
 @media print{body{margin:10mm}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 """
 
@@ -63,12 +64,13 @@ def gerar_html_impressao(registros, filtro_descricao: str, caminho: str) -> int:
     esc = html.escape
     linhas = []
     for reg in registros:
-        rid, data, nome, contato, desc, status, retorno = _linha(reg)
+        rid, data, nome, contato, desc, status, retorno, prioridade = _linha(reg)
         classe = "atendida" if status == "Atendida" else "pendente"
         linhas.append(
             f"<tr><td>{rid}</td><td>{esc(data)}</td><td>{esc(nome)}</td>"
             f"<td>{esc(contato)}</td><td class='desc'>{esc(desc)}</td>"
-            f"<td class='{classe}'>{esc(status)}</td><td>{esc(retorno)}</td></tr>"
+            f"<td class='{classe}'>{esc(status)}</td><td>{esc(retorno)}</td>"
+            f"<td class='{'urgente' if prioridade == 'Urgente' else ''}'>{esc(prioridade)}</td></tr>"
         )
     cab = "".join(f"<th>{esc(c)}</th>" for c in CABECALHO)
     texto = (

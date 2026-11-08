@@ -16,6 +16,21 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Novidades da versão 2.5
+
+* **Prioridade:** caixa **Urgente** no formulário e na edição. Urgentes aparecem
+  com "URG" na tabela, no filtro **Urgentes**, na ordenação pela coluna "Urg."
+  e no resumo do dia.
+* **Resumo do dia:** tela inicial (quando há algo a ver) com retornos de hoje ou
+  atrasados, urgentes pendentes e pendentes há mais de 7 dias, com botão
+  **Abrir** em cada item.
+* **Lembra como você deixou:** tamanho e posição da janela, ordenação, filtros e
+  tema (arquivo `dados/preferencias.json`).
+* **Atalhos:** Ctrl+N novo, Ctrl+F buscar, Ctrl+E exportar, Ctrl+P imprimir,
+  Ctrl+Z desfazer (status, exclusão e edição), Ctrl+T tema, F1 lista de atalhos.
+* **Tema escuro:** botão com lua/sol no rodapé do menu (ou Ctrl+T). Todas as
+  combinações de cores mantêm contraste mínimo de 4,5:1.
+
 ## Novidades da versão 2.4
 
 * **Formulário:** a ordem agora é **Contato**, **Nome** e **Descrição**; o campo
@@ -60,6 +75,11 @@ anotacoes_hospitalares/
 ├── main.py            # Ponto de entrada
 ├── gui.py             # Janela principal: barra lateral, formulário e histórico
 ├── paginas.py         # Telas de edição, Lixeira e Backup
+├── resumo.py          # Página 'Resumo do dia'
+├── atalhos.py         # Atalhos de teclado e Desfazer
+├── preferencias.py    # Preferências (tema, janela, filtros)
+├── test_tema.py       # Contraste dos dois temas
+├── test_preferencias.py
 ├── exportar.py        # CSV e página de impressão
 ├── exportacao.py      # Botão Exportar (telas)
 ├── test_util_exportar.py  # Testes de datas e exportação
@@ -100,7 +120,7 @@ python main.py
 Testes do banco de dados:
 
 ```bash
-python -m unittest test_database test_updater test_util_exportar -v
+python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema -v
 ```
 
 ## 3. Gerar o executável (.exe)

@@ -413,5 +413,57 @@ class TestRetornoEBusca(unittest.TestCase):
         self.assertEqual(db.contar_retornos(), 1)
 
 
+class TestPrioridade(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = Database(os.path.join(self.tmp.name, "t.db"))
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_padrao_e_urgente(self):
+        a = self.db.inserir("Ana", "", "x")
+        b = self.db.inserir("Bia", "", "y", prioridade="Urgente")
+        self.assertEqual(self.db.obter(a)[7], "Normal")
+        self.assertEqual(self.db.obter_detalhado(b)["prioridade"], "Urgente")
+        self.assertEqual([r[2] for r in self.db.listar(so_urgentes=True)], ["Bia"])
+        self.assertEqual(self.db.contar_urgentes(), 1)
+
+    def test_invalida(self):
+        with self.assertRaises(ValueError):
+            self.db.inserir("Ana", "", "x", prioridade="Altíssima")
+
+    def test_atualizar_mantem_e_muda(self):
+        a = self.db.inserir("Ana", "", "x", prioridade="Urgente")
+        self.db.atualizar(a, "Ana", "", "y")
+        self.assertEqual(self.db.obter(a)[7], "Urgente")
+        self.db.atualizar(a, "Ana", "", "y", prioridade="Normal")
+        self.assertEqual(self.db.obter(a)[7], "Normal")
+
+    def test_urgente_atendida_nao_conta(self):
+        a = self.db.inserir("Ana", "", "x", prioridade="Urgente")
+        self.db.atualizar_status(a, STATUS_ATENDIDA)
+        self.assertEqual(self.db.contar_urgentes(), 0)
+
+    def test_filtro_ate(self):
+        conn = sqlite3.connect(self.db.caminho)
+        conn.execute("INSERT INTO solicitacoes (data_hora, nome_paciente, contato, descricao)"
+                     " VALUES ('2026-01-05 10:00:00', 'Velha', '', 'x')")
+        conn.commit(); conn.close()
+        self.db.inserir("Nova", "", "x")
+        self.assertEqual([r[2] for r in self.db.listar(ate="2026-01-31")], ["Velha"])
+
+    def test_migracao_preserva_registros_como_normal(self):
+        caminho = os.path.join(self.tmp.name, "v.db")
+        conn = sqlite3.connect(caminho)
+        conn.execute("""CREATE TABLE solicitacoes (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_hora TEXT NOT NULL, nome_paciente TEXT NOT NULL, contato TEXT,
+            descricao TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Pendente')""")
+        conn.execute("INSERT INTO solicitacoes (data_hora, nome_paciente, descricao)"
+                     " VALUES ('2026-01-01 10:00:00', 'Velha', 'x')")
+        conn.commit(); conn.close()
+        self.assertEqual(Database(caminho).listar()[0][7], "Normal")
+
+
 if __name__ == "__main__":
     unittest.main()

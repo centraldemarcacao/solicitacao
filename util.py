@@ -127,3 +127,14 @@ def inicio_do_periodo(nome: str, hoje: "date | None" = None) -> "str | None":
     if nome == "Este mês":
         return hoje.replace(day=1).isoformat()
     return None
+
+
+DIAS = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+        "sexta-feira", "sábado", "domingo"]
+MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
+         "agosto", "setembro", "outubro", "novembro", "dezembro"]
+
+
+def saudacao(hora: int) -> str:
+    """Bom dia / Boa tarde / Boa noite conforme a hora."""
+    return "Bom dia" if hora < 12 else "Boa tarde" if hora < 18 else "Boa noite"

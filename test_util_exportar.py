@@ -40,8 +40,8 @@ class TestDatas(unittest.TestCase):
 
 
 class TestExportar(unittest.TestCase):
-    REGS = [(1, "2026-11-04 18:45:00", "=CMD()", "99", "linha; com \"aspas\"\nquebra", "Pendente", "2026-11-09"),
-            (2, "2026-11-05 09:00:00", "Ana <b>", None, "ok", "Atendida", None)]
+    REGS = [(1, "2026-11-04 18:45:00", "=CMD()", "99", "linha; com \"aspas\"\nquebra", "Pendente", "2026-11-09", "Urgente"),
+            (2, "2026-11-05 09:00:00", "Ana <b>", None, "ok", "Atendida", None, "Normal")]
 
     def test_csv(self):
         with tempfile.TemporaryDirectory() as d:
@@ -52,6 +52,8 @@ class TestExportar(unittest.TestCase):
         self.assertEqual(linhas[1][2], "'=CMD()")
         self.assertEqual(linhas[1][4], "linha; com \"aspas\"\nquebra")
         self.assertEqual(linhas[1][6], "09/11/2026")
+        self.assertEqual(linhas[0][7], "Prioridade")
+        self.assertEqual(linhas[1][7], "Urgente")
         self.assertEqual(linhas[2][3], "")
 
     def test_html_escapa(self):

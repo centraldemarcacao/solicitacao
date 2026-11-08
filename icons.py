@@ -131,7 +131,24 @@ def _download(d, c):
     _linha(d, [(10, 53), (54, 53)], c, 6)
 
 
+def _moon(d, c):
+    # lua crescente: círculo menos um círculo deslocado (apagado com transparência)
+    d.ellipse(_caixa(10, 8, 54, 52), fill=c)
+    d.ellipse(_caixa(25, 2, 65, 42), fill=(0, 0, 0, 0))
+
+
+def _sun(d, c):
+    d.ellipse(_caixa(20, 20, 44, 44), fill=c)
+    import math
+    for k in range(8):
+        a = math.radians(k * 45)
+        _linha(d, [(32 + 17 * math.cos(a), 32 + 17 * math.sin(a)),
+                   (32 + 25 * math.cos(a), 32 + 25 * math.sin(a))], c, 4.5)
+
+
 _DESENHOS = {
+    "moon": _moon,
+    "sun": _sun,
     "download": _download,
     "edit": _edit,
     "restore": _restore,
