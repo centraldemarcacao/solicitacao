@@ -16,6 +16,10 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Correções da versão 2.5.2
+
+* **Troca de tema:** trocar várias vezes seguidas podia deixar a janela vazia. Agora a troca espera o clique terminar, ignora cliques repetidos enquanto acontece e, se algo falhar, volta ao tema claro e avisa (detalhes em `dados/erros.log`).
+
 ## Correções da versão 2.5.1
 
 * **Menu lateral:** os itens ocupavam 200 px de altura cada um e empurravam "Backup" (e o rodapé) para fora da tela. Agora ficam compactos.

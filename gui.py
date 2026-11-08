@@ -292,21 +292,79 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             pass
 
     def alternar_tema(self) -> None:
-        """Troca entre tema claro e escuro, reconstruindo a interface no lugar."""
-        novo = "escuro" if T.TEMA_ATUAL == "claro" else "claro"
-        estado = self._capturar_estado()
-        tarefa = getattr(self.toast, "_tarefa", None)
+        """Pede a troca entre tema claro e escuro.
+
+        A troca roda um instante depois (e ignora cliques repetidos enquanto
+        acontece): destruir o botão dentro do próprio clique, ou reconstruir a
+        tela duas vezes seguidas, deixava a janela vazia."""
+        if getattr(self, "_trocando_tema", False):
+            return
+        self._trocando_tema = True
+        self.after(180, self._trocar_tema_agora)
+
+    def _trocar_tema_agora(self) -> None:
+        try:
+            novo = "escuro" if T.TEMA_ATUAL == "claro" else "claro"
+            try:
+                estado = self._capturar_estado()
+            except Exception:
+                estado = None
+            self._reconstruir_tudo(novo)
+            if estado:
+                self._restaurar_estado(estado)
+            else:
+                self.mostrar_pagina(PAG_NOVO)
+                self.atualizar_tudo()
+            self.prefs.definir(tema=novo)
+            self.prefs.salvar()
+            self.toast.mostrar(f"Tema {novo} ativado.", "info", 2500)
+        except Exception as exc:
+            self._recuperar_interface(exc)
+        finally:
+            self.after(500, lambda: setattr(self, "_trocando_tema", False))
+
+    def _reconstruir_tudo(self, tema: str) -> None:
+        """Remove toda a interface atual e monta de novo no tema indicado."""
+        tarefa = getattr(getattr(self, "toast", None), "_tarefa", None)
         if tarefa is not None:
-            self.after_cancel(tarefa)
-        self.barra_lateral.destroy()
-        self.area.destroy()
-        T.aplicar_tema(novo)
+            try:
+                self.after_cancel(tarefa)
+            except Exception:
+                pass
+        for filho in list(self.winfo_children()):
+            if isinstance(filho, (ctk.CTkToplevel, tk.Toplevel)):
+                continue   # janelas abertas (diálogos) não fazem parte da tela principal
+            try:
+                filho.destroy()
+            except Exception:
+                pass
+        T.aplicar_tema(tema)
         self.configure(fg_color=T.FUNDO)
-        self.prefs.definir(tema=novo)
-        self.prefs.salvar()
         self._construir_interface()
-        self._restaurar_estado(estado)
-        self.toast.mostrar(f"Tema {novo} ativado.", "info", 2500)
+
+    def _recuperar_interface(self, exc) -> None:
+        """Se a troca de tema falhar, volta ao tema claro; no pior caso pede para reabrir."""
+        try:
+            with open(os.path.join(os.path.dirname(self.db.caminho), "erros.log"),
+                      "a", encoding="utf-8") as arq:
+                arq.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] troca de tema\n"
+                          + "".join(traceback.format_exception(exc)) + "\n")
+        except Exception:
+            pass
+        try:
+            self._reconstruir_tudo("claro")
+            self.mostrar_pagina(PAG_NOVO)
+            self.atualizar_tudo()
+            self.prefs.definir(tema="claro")
+            self.prefs.salvar()
+            self.toast.mostrar("Não foi possível trocar o tema. Voltei ao tema claro.",
+                               "erro", 6000)
+        except Exception:
+            self.prefs.definir(tema="claro")
+            self.prefs.salvar()
+            messagebox.showerror(
+                "Tema", "Não foi possível redesenhar a janela.\n"
+                        "Feche e abra o programa novamente.")
 
     def _capturar_estado(self) -> dict:
         """Guarda o que o usuário estava fazendo (página, filtros, formulário)."""
