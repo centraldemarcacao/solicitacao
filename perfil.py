@@ -32,6 +32,13 @@ MAX_SUBTITULO = 40
 PADRAO = {"nome": "Liga Contra o Câncer", "subtitulo": "Solicitações de pacientes"}
 
 
+def titulo_completo() -> str:
+    """'Nome — Subtítulo' (ou só o nome, se não houver subtítulo)."""
+    if T.SUBTITULO:
+        return f"{T.NOME_INSTITUICAO} — {T.SUBTITULO}"
+    return T.NOME_INSTITUICAO
+
+
 def pasta_base() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)

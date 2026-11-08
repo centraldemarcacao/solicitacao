@@ -12,6 +12,7 @@ import tempfile
 from datetime import datetime
 
 import theme as T
+from perfil import titulo_completo
 from util import formatar_data, formatar_lembrete, plural
 
 CABECALHO = ("Nº", "Data/Hora", "Nome", "Contato", "Descrição", "Status", "Retorno",
@@ -75,8 +76,8 @@ def gerar_html_impressao(registros, filtro_descricao: str, caminho: str) -> int:
     cab = "".join(f"<th>{esc(c)}</th>" for c in CABECALHO)
     texto = (
         "<!doctype html><html lang='pt-BR'><head><meta charset='utf-8'>"
-        f"<title>{esc(T.SUBTITULO)}</title><style>{_ESTILO}</style></head><body>"
-        f"<h1>{esc(T.NOME_INSTITUICAO)} — {esc(T.SUBTITULO)}</h1>"
+        f"<title>{esc(T.SUBTITULO or T.NOME_INSTITUICAO)}</title><style>{_ESTILO}</style></head><body>"
+        f"<h1>{esc(titulo_completo())}</h1>"
         f"<p class='sub'>{esc(filtro_descricao)} • {plural(len(registros), 'registro', 'registros')} • "
         f"emitido em {datetime.now():%d/%m/%Y %H:%M}</p>"
         f"<table><thead><tr>{cab}</tr></thead><tbody>{''.join(linhas)}</tbody></table>"

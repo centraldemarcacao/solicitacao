@@ -16,6 +16,19 @@ com banco SQLite local, histórico pesquisável, alteração de status, edição
 * Os backups ficam em `dados/backups`, **no mesmo disco** do banco. Copie essa
   pasta de vez em quando para um pen drive ou nuvem pessoal.
 
+## Novidades da versão 2.8 — Personalizar (nome, logo e ícone)
+
+* Novo botão de **lápis** no rodapé do menu lateral (ao lado do botão de tema): abre a janela
+  **Personalizar**, onde você troca o **nome**, o **subtítulo** e o **logo** do programa.
+* O ícone da janela e da barra de tarefas é gerado a partir do logo escolhido
+  (PNG, JPG, BMP, GIF, WEBP ou ICO, até 10 MB). O ícone do arquivo .exe no Explorer não muda.
+* Tudo fica na pasta `dados` **deste computador** (`identidade.json`, `logo_personalizado.png`,
+  `icone_personalizado.ico`): cada computador tem a sua identidade, sem mexer em arquivos.
+  A atualização automática preserva tudo.
+* "Restaurar padrão" volta ao nome e logo de fábrica. O `perfil.json` da 2.7 continua
+  funcionando como padrão inicial; o que você salva na janela tem prioridade sobre ele.
+* O botão "Verificar atualizações" passou a se chamar "Atualizações" (para caber o novo botão).
+
 ## Novidades da versão 2.7 — Perfis por empresa
 
 * O nome e o subtítulo mostrados no programa (barra lateral, título da janela e
@@ -113,6 +126,7 @@ anotacoes_hospitalares/
 ├── atalhos.py         # Atalhos de teclado e Desfazer
 ├── preferencias.py    # Preferências (tema, janela, filtros)
 ├── test_tema.py       # Contraste dos dois temas
+├── identidade.py, identidade_gui.py, test_identidade.py  # Personalizar
 ├── perfil.py, perfil_intesoftware.json, test_perfil.py  # Perfis por empresa
 ├── test_nuvem.py      # Sincronização com o Supabase (servidor simulado)
 ├── nuvem.py, nuvem_gui.py, nuvem_sql.py, sincronizacao.py, supabase_setup.sql  # Nuvem
@@ -157,7 +171,7 @@ python main.py
 Testes do banco de dados:
 
 ```bash
-python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema test_nuvem test_perfil -v
+python -m unittest test_database test_updater test_util_exportar test_preferencias test_tema test_nuvem test_perfil test_identidade -v
 ```
 
 ## 3. Gerar o executável (.exe)

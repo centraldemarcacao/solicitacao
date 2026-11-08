@@ -24,6 +24,7 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 
+import perfil
 import theme as T
 from database import (
     DIAS_LIXEIRA,
@@ -40,6 +41,8 @@ from atalhos import AtalhosMixin
 from atualizacao import AtualizacaoMixin
 from exportacao import ExportacaoMixin
 from icons import icone
+from identidade import Identidade
+from identidade_gui import IdentidadeMixin
 from nuvem_gui import NuvemMixin
 from paginas import PaginasExtrasMixin
 from preferencias import Preferencias
@@ -116,7 +119,7 @@ COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "r
 
 
 class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
-          NuvemMixin, PaginasExtrasMixin, ctk.CTk):
+          NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -127,17 +130,11 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self._dpi = self._detectar_dpi()
         self._fator_escala = self._ajustar_escala_a_tela()
 
-        self.title(f"{T.NOME_INSTITUICAO} — {T.SUBTITULO}")
+        perfil.aplicar()    # perfil.json ao lado do .exe (se houver)
+        self.title(perfil.titulo_completo())
         self.geometry(f"{LARGURA_BASE}x{ALTURA_BASE}")
         self.minsize(MINIMO_LARGURA, MINIMO_ALTURA)
         self.configure(fg_color=T.FUNDO)
-
-        icone_janela = localizar_arquivo("icone.ico")
-        if icone_janela:
-            try:
-                self.iconbitmap(icone_janela)
-            except tk.TclError:
-                pass  # ícone indisponível neste sistema: segue sem ele
 
         self._com_erro = set()      # campos do formulário com erro
         self._rotulos_erro = {}     # campo -> rótulo da mensagem de erro
@@ -157,6 +154,12 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             )
             self.destroy()
             raise SystemExit(1)
+
+        # Identidade (nome, subtítulo, logo, ícone) personalizada neste computador.
+        self._identidade = Identidade(os.path.dirname(self.db.caminho))
+        self._identidade.aplicar()
+        self.title(perfil.titulo_completo())
+        self._aplicar_icone_janela()
 
         # Preferências (tema, janela, ordenação e filtros) ficam ao lado do banco.
         self.prefs = Preferencias(os.path.join(os.path.dirname(self.db.caminho),
@@ -402,6 +405,21 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.mostrar_pagina(e["pagina"])
         self.atualizar_tudo()
 
+    def _aplicar_icone_janela(self) -> None:
+        """Ícone da janela: o personalizado (dados/) ou o icone.ico do pacote."""
+        caminho = self._identidade.caminho_icone() or localizar_arquivo("icone.ico")
+        if not caminho:
+            return
+
+        def aplicar():
+            try:
+                self.iconbitmap(caminho)
+            except Exception:
+                pass  # ícone indisponível neste sistema: segue sem ele
+
+        aplicar()
+        self.after(300, aplicar)   # o CustomTkinter pode recolocar o ícone padrão ao abrir
+
     # ==================================================================
     # Barra lateral
     # ==================================================================
@@ -412,23 +430,12 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.barra_lateral = barra
 
         # --- Marca ---------------------------------------------------
-        marca = ctk.CTkFrame(barra, fg_color="transparent")
-        marca.pack(fill="x", padx=22, pady=(22, 4))
-        self._montar_logo(marca)
-        textos = ctk.CTkFrame(marca, fg_color="transparent")
-        textos.pack(side="left", padx=(12, 0))
-        alinhar_esquerda(ctk.CTkLabel(
-            textos, text=T.NOME_INSTITUICAO, font=fonte(16, "bold"),
-            text_color=T.BRANCO, anchor="w", wraplength=170,
-        )).pack(anchor="w")
-        ctk.CTkLabel(
-            textos, text=T.SUBTITULO, font=fonte(12),
-            text_color=T.NAV_SUAVE, anchor="w", wraplength=170,
-        ).pack(anchor="w")
-
-        ctk.CTkFrame(barra, height=1, fg_color=T.NAV_LINHA, corner_radius=0).pack(
-            fill="x", padx=22, pady=(14, 12)
-        )
+        self._marca = None
+        self._separador_marca = None
+        self._montar_marca(barra)
+        self._separador_marca = ctk.CTkFrame(barra, height=1, fg_color=T.NAV_LINHA,
+                                             corner_radius=0)
+        self._separador_marca.pack(fill="x", padx=22, pady=(14, 12))
 
         # --- Menu ----------------------------------------------------
         ctk.CTkLabel(
@@ -466,7 +473,13 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         )
         self._btn_tema.pack(side="right", padx=(8, 0))
         ctk.CTkButton(
-            self._rodape_botao, text="Verificar atualizações", height=30,
+            self._rodape_botao, text="", width=38, height=30,
+            image=icone("edit", T.NAV_TEXTO, 18),
+            fg_color="transparent", border_width=1, border_color=T.NAV_LINHA,
+            hover_color=T.NAVY_HOVER, command=self.personalizar_identidade,
+        ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(
+            self._rodape_botao, text="Atualizações", height=30,
             font=fonte(12, "bold"), fg_color="transparent", text_color=T.NAV_TEXTO,
             border_width=1, border_color=T.NAV_LINHA, hover_color=T.NAVY_HOVER,
             command=self.verificar_atualizacao_manual,
@@ -506,9 +519,31 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         if nivel >= 2:
             self._rodape_relogio.pack(side="bottom", fill="x", padx=22, pady=(0, 12))
 
+    def _montar_marca(self, barra) -> None:
+        """Logo + nome + subtítulo no topo da barra lateral (refeito ao personalizar)."""
+        marca = ctk.CTkFrame(barra, fg_color="transparent")
+        extra = {"before": self._separador_marca} if getattr(self, "_separador_marca", None) else {}
+        marca.pack(fill="x", padx=22, pady=(22, 4), **extra)
+        self._marca = marca
+        self._montar_logo(marca)
+        textos = ctk.CTkFrame(marca, fg_color="transparent")
+        textos.pack(side="left", padx=(12, 0))
+        self.lbl_marca_nome = ctk.CTkLabel(
+            textos, text=T.NOME_INSTITUICAO, font=fonte(16, "bold"),
+            text_color=T.BRANCO, anchor="w", wraplength=170,
+        )
+        alinhar_esquerda(self.lbl_marca_nome).pack(anchor="w")
+        self.lbl_marca_sub = ctk.CTkLabel(
+            textos, text=T.SUBTITULO, font=fonte(12),
+            text_color=T.NAV_SUAVE, anchor="w", wraplength=170,
+        )
+        if T.SUBTITULO:
+            self.lbl_marca_sub.pack(anchor="w")
+
     def _montar_logo(self, pai) -> None:
-        """Usa logo.png (se existir) sobre placa branca; senão, a marca própria."""
-        caminho = localizar_arquivo("logo.png")
+        """Logo personalizado (dados/) ou logo.png do pacote, sobre placa branca;
+        senão, a marca própria."""
+        caminho = self._identidade.caminho_logo() or localizar_arquivo("logo.png")
         if caminho:
             try:
                 from PIL import Image
