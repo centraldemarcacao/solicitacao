@@ -1,0 +1,3 @@
+# Dependências para DESENVOLVER e gerar o .exe (inclui as de execução)
+-r requirements.txt
+pyinstaller>=6.0
