@@ -18,6 +18,8 @@ import urllib.request
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from anotacoes.nucleo.certificados import MENSAGEM_CERTIFICADO, contexto_ssl, erro_de_certificado
+
 NOME_EXE = "AnotacoesHospitalares.exe"
 NOME_HASH = "SHA256.txt"
 HOSTS_PERMITIDOS = ("github.com", "githubusercontent.com")
@@ -63,8 +65,10 @@ def _abrir(url: str, timeout: float):
         "Accept": "application/vnd.github+json, application/octet-stream",
     })
     try:
-        resp = urllib.request.urlopen(req, timeout=timeout)
+        resp = urllib.request.urlopen(req, timeout=timeout, context=contexto_ssl())
     except Exception as exc:
+        if erro_de_certificado(exc):
+            raise ErroAtualizacao(MENSAGEM_CERTIFICADO) from exc
         raise ErroAtualizacao(f"Sem acesso ao servidor de atualizações ({exc}).") from exc
     if not _url_segura(resp.geturl()):
         resp.close()

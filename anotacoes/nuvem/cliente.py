@@ -20,6 +20,8 @@ import urllib.parse
 import urllib.request
 from typing import Callable, Optional
 
+from anotacoes.nucleo.certificados import MENSAGEM_CERTIFICADO, contexto_ssl, erro_de_certificado
+
 TIMEOUT_PADRAO = 20
 
 
@@ -105,7 +107,7 @@ class ClienteSupabase:
         for nome, valor in (cabecalhos or {}).items():
             req.add_header(nome, valor)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=contexto_ssl()) as resp:
                 bruto = resp.read()
         except urllib.error.HTTPError as exc:
             try:
@@ -114,6 +116,8 @@ class ClienteSupabase:
                 detalhe = {}
             raise _erro_http(exc.code, detalhe) from None
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            if erro_de_certificado(exc):
+                raise NuvemErro(MENSAGEM_CERTIFICADO) from exc
             raise NuvemErro(
                 "Sem conexão com o Supabase. Verifique a internet "
                 "(a rede da instituição pode estar bloqueando o acesso).") from exc

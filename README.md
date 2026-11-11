@@ -14,7 +14,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 * **Lixeira** (30 dias) e **Backup** automático/manual com restauração.
 * **Desfazer** (Ctrl+Z), atalhos de teclado (F1 mostra todos) e tema claro/escuro.
 * **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline.
-* **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); liga/desliga no sino do menu (Ctrl + L).
+* **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); horários editáveis e liga/desliga no sino do menu (Ctrl + L).
 * **Personalizar**: nome, subtítulo e logo por computador.
 * **Atualização automática** pelo GitHub Releases, com conferência SHA-256.
 
@@ -32,6 +32,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   ├── util.py            #     validações e formatação
 │   │   ├── preferencias.py    #     preferências do usuário
 │   │   ├── pausas.py          #     horários dos alertas de pausa
+│   │   ├── certificados.py    #     HTTPS: certificados do Windows e ca-extra.pem
 │   │   ├── exportar.py        #     CSV e página de impressão
 │   │   └── identidade.py      #     nome, subtítulo, logo e ícone
 │   ├── nuvem/                 #   Supabase (sem interface)

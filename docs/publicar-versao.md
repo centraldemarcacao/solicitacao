@@ -30,6 +30,7 @@ possa gravar (Documentos, Área de Trabalho). A pasta `dados` é criada ao lado 
 | Release sem o `.exe` | Veja a aba **Actions**: o passo que falhou aparece em vermelho. |
 | `.exe` da Release com versão antiga | A tag foi criada antes de enviar o código novo. Envie tudo, apague a tag e a Release e crie de novo. |
 | "Atualizações" diz que está em dia | Confira se a tag é maior que a versão instalada e se a Release foi *publicada* (não rascunho). |
+| "CERTIFICATE_VERIFY_FAILED" / "unable to get local issuer certificate" | A rede inspeciona a conexão segura e o certificado dela não é reconhecido. Peça à TI o certificado raiz da instituição (.pem/.crt em Base-64), salve-o como `ca-extra.pem` na pasta `dados` ao lado do `.exe` e reabra o programa. A verificação não é desligada. |
 | Rede da instituição bloqueia o GitHub | A verificação falha em silêncio e o programa funciona normalmente. |
 
 ## Gerar o `.exe` no seu computador (sem GitHub)

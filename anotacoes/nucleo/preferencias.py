@@ -1,15 +1,18 @@
 """
 preferencias.py
 ---------------
-Preferências do usuário (tema, tamanho da janela, ordenação, filtros e alertas de pausa),
-guardadas em dados/preferencias.json. Nunca impedem o programa de abrir:
+Preferências do usuário (tema, tamanho da janela, ordenação, filtros e alertas de pausa:
+liga/desliga e horários), guardadas em dados/preferencias.json. Nunca impedem o programa de abrir:
 arquivo ausente, vazio ou corrompido volta aos padrões.
 """
 
 import json
 import os
 
+from anotacoes.nucleo.pausas import horarios_validos
+
 CHAVE_ALERTAS_PAUSA = "alertas_pausa"
+CHAVE_HORARIOS_PAUSA = "horarios_pausa"
 
 
 class Preferencias:
@@ -41,6 +44,16 @@ class Preferencias:
     @alertas_pausa.setter
     def alertas_pausa(self, ativo: bool) -> None:
         self.dados[CHAVE_ALERTAS_PAUSA] = bool(ativo)
+
+    @property
+    def horarios_pausa(self) -> dict:
+        """{"nr17_1": "14:40", "lanche": "17:00", "nr17_2": "18:10"} (ou os que o
+        usuário escolheu). Ausente ou inválido volta ao padrão, item a item."""
+        return horarios_validos(self.dados.get(CHAVE_HORARIOS_PAUSA))
+
+    @horarios_pausa.setter
+    def horarios_pausa(self, horarios: dict) -> None:
+        self.dados[CHAVE_HORARIOS_PAUSA] = horarios_validos(horarios)
 
     def salvar(self) -> bool:
         """Grava com segurança (arquivo temporário + troca). False se não foi possível."""

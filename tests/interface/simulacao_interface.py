@@ -85,6 +85,7 @@ class Widget:
         for k in list(self.kids): k.destroy()
     def winfo_children(self): return list(self.kids)
     def winfo_ismapped(self): return self.mapped
+    def winfo_exists(self): return not self.dead
     def winfo_width(self): return 1200
     def winfo_height(self): return 800
     def winfo_rootx(self): return 0
@@ -981,9 +982,35 @@ check(app.prefs.alertas_pausa is True, "religar os alertas")
 app._ciclo_pausas(); check(app._dialogo_pausa._title == "Pausa NR 17", "18:10: alerta aparece após religar (dentro da tolerância)")
 import json as _json
 check(_json.load(open(app.prefs.caminho, encoding="utf-8"))["alertas_pausa"] is True, "escolha gravada em preferencias.json")
+_DialogoPausaReal = pausas_gui.DialogoPausa
 pausas_gui.DialogoPausa = type("Falha", (), {"__init__": lambda self, *a: (_ for _ in ()).throw(RuntimeError("x"))})
 _Relogio.agora = _dt(2026, 11, 12, 14, 40, 0)
 app._ciclo_pausas(); check(app._dialogo_pausa is None and "NR 17" in app.toast._rotulo.cget("text"), "se a janela falhar, o aviso sai como notificação")
+
+# --- horários editáveis ---
+app._btn_pausas._cfg["command"]()
+dlg = app._dialogo_horarios
+check(dlg is not None and sorted(dlg.entradas) == ["lanche", "nr17_1", "nr17_2"], "sino abre a janela de horários com 3 campos")
+check([dlg.entradas[k].get() for k in ("nr17_1", "lanche", "nr17_2")] == ["14:40", "17:00", "18:10"] and dlg.chk_ativo.get() == 1, "janela mostra horários atuais e alertas ligados")
+app.configurar_alertas_pausa(); check(app._dialogo_horarios is dlg, "abrir de novo reaproveita a janela")
+dlg.entradas["lanche"].delete(0, "end"); dlg.entradas["lanche"].insert(0, "25:00"); dlg._salvar()
+check("inválido" in dlg.lbl_erro.cget("text") and not dlg.dead and app.prefs.horarios_pausa["lanche"] == "17:00", "horário inválido mostra erro e não salva")
+dlg.entradas["lanche"].delete(0, "end"); dlg.entradas["lanche"].insert(0, "14h40"); dlg._salvar()
+check("mesmo horário" in dlg.lbl_erro.cget("text") and not dlg.dead, "horários repetidos são recusados")
+dlg._restaurar(); check(dlg.entradas["lanche"].get() == "17:00" and dlg.lbl_erro.cget("text") == "", "restaurar padrão")
+for chave, texto in (("nr17_1", "9h15"), ("lanche", "12:00"), ("nr17_2", "1530")):
+    dlg.entradas[chave].delete(0, "end"); dlg.entradas[chave].insert(0, texto)
+dlg._salvar()
+check(dlg.dead and app.prefs.horarios_pausa == {"nr17_1": "09:15", "lanche": "12:00", "nr17_2": "15:30"}, "salvar grava os novos horários")
+check("09:15, 12:00, 15:30" in app.toast._rotulo.cget("text"), "aviso confirma os horários salvos")
+check(_json.load(open(app.prefs.caminho, encoding="utf-8"))["horarios_pausa"]["lanche"] == "12:00", "horários gravados em preferencias.json")
+pausas_gui.DialogoPausa = _DialogoPausaReal
+app._dialogo_pausa = None; _Relogio.agora = _dt(2026, 11, 13, 14, 40, 0)
+app._ciclo_pausas(); check(app._dialogo_pausa is None, "horário antigo (14:40) deixa de avisar depois da mudança")
+_Relogio.agora = _dt(2026, 11, 13, 12, 0, 0)
+app._ciclo_pausas(); check(app._dialogo_pausa is not None and app._dialogo_pausa._title == "Pausa para lanche", "novo horário (12:00) passa a avisar")
+app.alternar_alertas_pausa(); check(app.prefs.alertas_pausa is False and "desativados" in app.toast._rotulo.cget("text"), "Ctrl+L desliga direto")
+app.alternar_alertas_pausa(); check(app.prefs.alertas_pausa is True and "12:00" in app.toast._rotulo.cget("text"), "Ctrl+L liga e mostra os horários atuais")
 
 # Utilidades
 app._atualizar_relogio()

@@ -1,13 +1,17 @@
 # Histórico de versões
 
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
-(tag `v2.10.0`); o programa instalado se atualiza sozinho a partir delas.
+(tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## Próxima versão — Alertas de pausa
 * Janela de aviso, com sinal sonoro, às **14:40** (Pausa NR 17), **17:00** (Pausa para lanche) e
   **18:10** (Pausa NR 17). Aparece mesmo com o programa minimizado e não bloqueia o trabalho.
-* Botão de **sino** no relógio do menu lateral (ou **Ctrl + L**) liga/desliga os alertas; a escolha
-  fica em `preferencias.json` (`alertas_pausa`, ligado por padrão).
+* Botão de **sino** no relógio do menu lateral abre a janela **Alertas de pausa**: liga/desliga e
+  permite **mudar os três horários** (aceita 14:40, 14h40 ou 1440; restaurar padrão). **Ctrl + L** liga/desliga
+  direto. Fica em `preferencias.json` (`alertas_pausa` e `horarios_pausa`).
+* **Correção:** "CERTIFICATE_VERIFY_FAILED" ao verificar atualizações (e na nuvem) em redes que inspecionam a
+  conexão segura. O programa passa a confiar também nos certificados do Windows e em um `ca-extra.pem`
+  opcional na pasta `dados`. A verificação do certificado continua sempre ativa.
 
 ## 2.9.0 — Organização do projeto
 * Código reorganizado em pacote: `anotacoes/` (`nucleo`, `nuvem`, `atualizacao`, `interface`),

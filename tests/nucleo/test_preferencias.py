@@ -40,6 +40,19 @@ class T(unittest.TestCase):
             escrever(c, '{"alertas_pausa": "nao"}')               # valor inválido
             self.assertTrue(Preferencias(c).alertas_pausa)
 
+    def test_horarios_de_pausa(self):
+        padrao = {"nr17_1": "14:40", "lanche": "17:00", "nr17_2": "18:10"}
+        with tempfile.TemporaryDirectory() as d:
+            c = os.path.join(d, "p.json")
+            p = Preferencias(c)
+            self.assertEqual(p.horarios_pausa, padrao)
+            p.horarios_pausa = {"nr17_1": "9h30", "lanche": "12:00", "nr17_2": "bad"}
+            self.assertTrue(p.salvar())
+            self.assertEqual(Preferencias(c).horarios_pausa,
+                             {"nr17_1": "09:30", "lanche": "12:00", "nr17_2": "18:10"})
+            escrever(c, '{"horarios_pausa": [1, 2]}')                 # tipo errado
+            self.assertEqual(Preferencias(c).horarios_pausa, padrao)
+
     def test_pasta_inexistente_nao_levanta(self):
         p = Preferencias(os.path.join(tempfile.gettempdir(), "nao_existe_xyz", "p.json"))
         p.definir(a=1)

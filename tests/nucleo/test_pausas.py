@@ -1,7 +1,8 @@
 import unittest
 from datetime import date, datetime
 
-from anotacoes.nucleo.pausas import PAUSAS, TOLERANCIA_SEGUNDOS, marcar_avisada, pausa_devida
+from anotacoes.nucleo.pausas import (HORARIOS_PADRAO, PAUSAS, TOLERANCIA_SEGUNDOS, horarios_validos,
+                                     interpretar_horario, marcar_avisada, montar_pausas, pausa_devida)
 
 
 def em(h, m, s=0, dia=11):
@@ -40,7 +41,37 @@ class T(unittest.TestCase):
         avisadas = set()
         marcar_avisada(avisadas, PAUSAS[0], date(2026, 11, 11))
         marcar_avisada(avisadas, PAUSAS[1], date(2026, 11, 12))
-        self.assertEqual(avisadas, {(date(2026, 11, 12), "17:00")})
+        self.assertEqual(avisadas, {(date(2026, 11, 12), "lanche", "17:00")})
+
+    def test_interpretar_horario(self):
+        for texto, esperado in (("14:40", (14, 40)), ("14h40", (14, 40)), ("14.40", (14, 40)),
+                                ("1440", (14, 40)), ("940", (9, 40)), ("9", (9, 0)),
+                                ("9h", (9, 0)), (" 7:05 ", (7, 5))):
+            h = interpretar_horario(texto)
+            self.assertEqual((h.hour, h.minute), esperado, texto)
+        for ruim in ("24:00", "12:60", "abc", "", "14:4", "1:2", "14:40:10", None, 1440):
+            self.assertIsNone(interpretar_horario(ruim), repr(ruim))
+
+    def test_horarios_validos_completa_e_corrige(self):
+        self.assertEqual(horarios_validos(None), HORARIOS_PADRAO)
+        self.assertEqual(horarios_validos("lixo"), HORARIOS_PADRAO)
+        r = horarios_validos({"lanche": "16h30", "nr17_1": "xx", "extra": "10:00"})
+        self.assertEqual(r, {"nr17_1": "14:40", "lanche": "16:30", "nr17_2": "18:10"})
+
+    def test_horarios_personalizados(self):
+        pausas = montar_pausas({"nr17_1": "10:15", "lanche": "12:00", "nr17_2": "15:30"})
+        self.assertEqual([p.rotulo for p in pausas], ["10:15", "12:00", "15:30"])
+        self.assertIsNone(pausa_devida(em(14, 40), set(), pausas))          # horário antigo não dispara
+        self.assertEqual(pausa_devida(em(12, 0), set(), pausas).tipo, "lanche")
+
+    def test_mudar_horario_depois_de_avisar_avisa_de_novo(self):
+        avisadas = set()
+        antes = montar_pausas()
+        p = pausa_devida(em(14, 40), avisadas, antes)
+        marcar_avisada(avisadas, p, date(2026, 11, 11))
+        depois = montar_pausas({"nr17_1": "14:50"})
+        self.assertIsNone(pausa_devida(em(14, 40, 30), avisadas, depois))
+        self.assertEqual(pausa_devida(em(14, 50), avisadas, depois).chave, "nr17_1")
 
 
 if __name__ == "__main__":

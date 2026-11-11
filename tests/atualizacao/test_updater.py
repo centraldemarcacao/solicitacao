@@ -48,7 +48,7 @@ class T(unittest.TestCase):
         self.assertFalse(updater._url_segura("https://evilgithub.com/a"))
 
     def _baixar(self, exe, hash_txt):
-        def fake(req, timeout=0):
+        def fake(req, timeout=0, **_kw):
             return FakeResp(exe if req.full_url.endswith("e.exe") else hash_txt.encode())
         with tempfile.TemporaryDirectory() as d, mock.patch("urllib.request.urlopen", fake):
             try:
@@ -72,12 +72,33 @@ class T(unittest.TestCase):
 
     def test_cancelar(self):
         ev = threading.Event(); ev.set()
-        def fake(req, timeout=0):
+        def fake(req, timeout=0, **_kw):
             return FakeResp(EXE if req.full_url.endswith("e.exe") else HASH.encode())
         with tempfile.TemporaryDirectory() as d, mock.patch("urllib.request.urlopen", fake):
             with self.assertRaises(updater.ErroAtualizacao):
                 updater.baixar(info(), d, cancelar=ev)
             self.assertEqual(os.listdir(d), [])
+
+    def test_erro_de_certificado_tem_mensagem_clara(self):
+        import ssl, urllib.error
+        def fake(req, timeout=0, **_kw):
+            raise urllib.error.URLError(ssl.SSLCertVerificationError(1, "unable to get local issuer certificate"))
+        with mock.patch("urllib.request.urlopen", fake):
+            with self.assertRaises(updater.ErroAtualizacao) as cm:
+                updater.buscar_ultima("usuario/repo")
+        self.assertIn("ca-extra.pem", str(cm.exception))
+        self.assertNotIn("CERTIFICATE_VERIFY_FAILED", str(cm.exception))
+
+    def test_usa_verificacao_de_certificado(self):
+        visto = {}
+        def fake(req, timeout=0, context=None, **_kw):
+            visto["ctx"] = context
+            raise OSError("parou aqui")
+        with mock.patch("urllib.request.urlopen", fake):
+            with self.assertRaises(updater.ErroAtualizacao):
+                updater.buscar_ultima("usuario/repo")
+        import ssl
+        self.assertEqual(visto["ctx"].verify_mode, ssl.CERT_REQUIRED)
 
     def test_script(self):
         with tempfile.TemporaryDirectory() as d:
