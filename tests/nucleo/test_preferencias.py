@@ -26,6 +26,20 @@ class T(unittest.TestCase):
             escrever(c, "[1, 2]")                                     # tipo errado
             self.assertEqual(Preferencias(c).dados, {})
 
+    def test_alertas_de_pausa(self):
+        with tempfile.TemporaryDirectory() as d:
+            c = os.path.join(d, "p.json")
+            p = Preferencias(c)
+            self.assertTrue(p.alertas_pausa)                      # padrão: ligado
+            p.alertas_pausa = False
+            self.assertTrue(p.salvar())
+            self.assertFalse(Preferencias(c).alertas_pausa)       # persiste
+            p.alertas_pausa = True
+            p.salvar()
+            self.assertTrue(Preferencias(c).alertas_pausa)
+            escrever(c, '{"alertas_pausa": "nao"}')               # valor inválido
+            self.assertTrue(Preferencias(c).alertas_pausa)
+
     def test_pasta_inexistente_nao_levanta(self):
         p = Preferencias(os.path.join(tempfile.gettempdir(), "nao_existe_xyz", "p.json"))
         p.definir(a=1)

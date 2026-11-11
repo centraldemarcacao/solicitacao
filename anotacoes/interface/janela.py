@@ -8,7 +8,7 @@ Estrutura:
   - Novo registro: formulário com validação + resumo e últimos registros.
   - Histórico: indicadores, busca, filtro, tabela e ações
     (marcar como atendida/pendente, detalhes, editar, excluir).
-  - Lixeira, Backup, edição, Nuvem, Resumo etc.: veja interface/mixins/.
+  - Lixeira, Backup, edição, Nuvem, Resumo, alertas de pausa etc.: veja interface/mixins/.
 
 Nome e logotipo: botão de lápis no menu lateral (veja mixins/identidade.py).
 Cores e fonte: veja anotacoes/theme.py.
@@ -32,6 +32,7 @@ from anotacoes.interface.mixins.exportacao import ExportacaoMixin
 from anotacoes.interface.mixins.identidade import IdentidadeMixin
 from anotacoes.interface.mixins.nuvem import NuvemMixin
 from anotacoes.interface.mixins.paginas import PaginasExtrasMixin
+from anotacoes.interface.mixins.pausas import PausasMixin
 from anotacoes.interface.mixins.resumo import ResumoMixin
 from anotacoes.interface.widgets import (
     CaixaBusca,
@@ -103,7 +104,7 @@ COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "r
 
 
 class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
-          NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, ctk.CTk):
+          NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, PausasMixin, ctk.CTk):
     def __init__(self) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -179,6 +180,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         if aviso_inicial:
             self.toast.mostrar(aviso_inicial, "erro", 8000)
         self._iniciar_atualizacao()
+        self._iniciar_pausas()
 
     # ==================================================================
     # Escala e tamanho da janela
@@ -477,6 +479,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self._rodape_relogio, text="", font=fonte(12), text_color=T.NAV_SUAVE, anchor="w",
         )
         self.lbl_data.pack(anchor="w", padx=18, pady=(0, 8))
+        self._montar_botao_pausas(self._rodape_relogio)
         self._barra_lateral = barra
         self._rodape_nivel = None
         self._ajustar_rodape(None)

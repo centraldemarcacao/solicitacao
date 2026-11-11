@@ -93,6 +93,9 @@ class Widget:
     def winfo_screenwidth(self): return SCREEN['w']
     def winfo_screenheight(self): return SCREEN['h']
     def update_idletasks(self): pass
+    def attributes(self, *a): pass
+    def deiconify(self): pass
+    def bell(self): self.bips = getattr(self, 'bips', 0) + 1
     def title(self, t=None): self._title = t
     def geometry(self, g=None): self._geo = g
     def minsize(self, w, h): pass
@@ -948,6 +951,39 @@ trocas = []
 updater.executar_troca = lambda novo: trocas.append(novo)
 app._finalizar_atualizacao("novo.exe")
 check(trocas == ["novo.exe"] and app.dead, "finalizar: faz backup, dispara a troca e fecha o programa")
+
+# --- alertas de pausa (14:40 / 17:00 / 18:10) ---
+from datetime import datetime as _dt
+from anotacoes.interface.mixins import pausas as pausas_gui
+class _Relogio:
+    agora = _dt(2026, 11, 11, 10, 0, 0)
+    @classmethod
+    def now(cls): return cls.agora
+pausas_gui.datetime = _Relogio
+pausas_gui._tocar_sinal = lambda j: j.bell()
+check(app._btn_pausas.mapped and app.prefs.alertas_pausa, "botão de sino na barra lateral (alertas ligados por padrão)")
+check(("Ctrl + L") in [a for a, _ in __import__("anotacoes.interface.mixins.atalhos", fromlist=["x"]).ATALHOS] and "<Control-l>" in app.binds, "Ctrl+L registrado e listado em F1")
+app._ciclo_pausas(); check(app._dialogo_pausa is None, "10:00: nenhum alerta")
+_Relogio.agora = _dt(2026, 11, 11, 14, 40, 0); bips0 = getattr(app, "bips", 0)
+app._ciclo_pausas()
+check(app._dialogo_pausa is not None and app._dialogo_pausa._title == "Pausa NR 17", "14:40:00: alerta 'Pausa NR 17' aparece")
+app._ciclo_pausas(); check(len(app._pausas_avisadas) == 1, "o mesmo horário não avisa de novo")
+check(app.after_calls[-1][0] == pausas_gui.INTERVALO_MS, "laço se reagenda sozinho (after)")
+app._bipar(pausas_gui.BIPES); check(getattr(app, "bips", 0) > bips0, "sinal sonoro tocado")
+_Relogio.agora = _dt(2026, 11, 11, 17, 0, 1)
+app._ciclo_pausas(); check(app._dialogo_pausa._title == "Pausa para lanche" and len(app._pausas_avisadas) == 2, "17:00: alerta 'Pausa para lanche' substitui o anterior")
+app.alternar_alertas_pausa()
+check(app.prefs.alertas_pausa is False and "desativados" in app.toast._rotulo.cget("text"), "sino desliga os alertas e avisa")
+_Relogio.agora = _dt(2026, 11, 11, 18, 10, 0); app._dialogo_pausa = None
+app._ciclo_pausas(); check(app._dialogo_pausa is None, "18:10 com alertas desligados: nada aparece")
+app.alternar_alertas_pausa()
+check(app.prefs.alertas_pausa is True, "religar os alertas")
+app._ciclo_pausas(); check(app._dialogo_pausa._title == "Pausa NR 17", "18:10: alerta aparece após religar (dentro da tolerância)")
+import json as _json
+check(_json.load(open(app.prefs.caminho, encoding="utf-8"))["alertas_pausa"] is True, "escolha gravada em preferencias.json")
+pausas_gui.DialogoPausa = type("Falha", (), {"__init__": lambda self, *a: (_ for _ in ()).throw(RuntimeError("x"))})
+_Relogio.agora = _dt(2026, 11, 12, 14, 40, 0)
+app._ciclo_pausas(); check(app._dialogo_pausa is None and "NR 17" in app.toast._rotulo.cget("text"), "se a janela falhar, o aviso sai como notificação")
 
 # Utilidades
 app._atualizar_relogio()

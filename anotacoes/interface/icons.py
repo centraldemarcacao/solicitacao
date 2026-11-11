@@ -161,8 +161,26 @@ def _sun(d, c):
                    (32 + 25 * math.cos(a), 32 + 25 * math.sin(a))], c, 4.5)
 
 
+def _bell(d, c):
+    # sino: corpo (cúpula + borda), base e badalo
+    d.pieslice(_caixa(14, 10, 50, 46), 180, 360, fill=c)
+    d.polygon([(_s(14), _s(28)), (_s(50), _s(28)), (_s(54), _s(46)), (_s(10), _s(46))], fill=c)
+    d.rounded_rectangle(_caixa(8, 43, 56, 49), radius=_s(3), fill=c)
+    d.ellipse(_caixa(26, 49, 38, 58), fill=c)
+    d.ellipse(_caixa(29, 6, 35, 12), fill=c)
+
+
+def _bell_off(d, c):
+    # sino com traço diagonal (alertas desligados)
+    _bell(d, c)
+    _linha(d, [(10, 54), (54, 8)], (0, 0, 0, 0), 13)   # recorte ao redor do traço
+    _linha(d, [(10, 54), (54, 8)], c, 5)
+
+
 _DESENHOS = {
     "moon": _moon,
+    "bell": _bell,
+    "bell_off": _bell_off,
     "cloud": _cloud,
     "sun": _sun,
     "download": _download,

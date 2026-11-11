@@ -24,6 +24,7 @@ ATALHOS = (
     ("Ctrl + P", "Imprimir a lista"),
     ("Ctrl + Z", "Desfazer a última ação (status, exclusão ou edição)"),
     ("Ctrl + T", "Alternar entre tema claro e escuro"),
+    ("Ctrl + L", "Ligar ou desligar os alertas de pausa (14:40, 17:00 e 18:10)"),
     ("F2", "Editar o registro selecionado"),
     ("Enter / duplo clique", "Abrir os detalhes do registro"),
     ("Delete", "Excluir (enviar para a lixeira)"),
@@ -33,7 +34,8 @@ ATALHOS = (
 
 class AtalhosMixin:
     """Requer: self.mostrar_pagina, self.ent_contato, self.busca, self.toast, self.db,
-    self.atualizar_tudo, self.exportar_csv, self.imprimir_lista, self.alternar_tema."""
+    self.atualizar_tudo, self.exportar_csv, self.imprimir_lista, self.alternar_tema,
+    self.alternar_alertas_pausa."""
 
     def _iniciar_atalhos(self) -> None:
         self._pilha_desfazer = []
@@ -41,6 +43,7 @@ class AtalhosMixin:
             ("n", self._atalho_novo), ("f", self._atalho_buscar),
             ("e", self._atalho_exportar), ("p", self._atalho_imprimir),
             ("z", self._atalho_desfazer), ("t", lambda: self.alternar_tema()),
+            ("l", lambda: self.alternar_alertas_pausa()),
             ("s", self._atalho_salvar),
         ):
             for variante in (tecla, tecla.upper()):

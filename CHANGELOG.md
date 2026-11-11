@@ -3,6 +3,12 @@
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
+## Próxima versão — Alertas de pausa
+* Janela de aviso, com sinal sonoro, às **14:40** (Pausa NR 17), **17:00** (Pausa para lanche) e
+  **18:10** (Pausa NR 17). Aparece mesmo com o programa minimizado e não bloqueia o trabalho.
+* Botão de **sino** no relógio do menu lateral (ou **Ctrl + L**) liga/desliga os alertas; a escolha
+  fica em `preferencias.json` (`alertas_pausa`, ligado por padrão).
+
 ## 2.9.0 — Organização do projeto
 * Código reorganizado em pacote: `anotacoes/` (`nucleo`, `nuvem`, `atualizacao`, `interface`),
   com `tests/`, `docs/`, `assets/`, `scripts/` e `supabase/` (veja `docs/arquitetura.md`).
