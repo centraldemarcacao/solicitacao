@@ -1,7 +1,7 @@
 # Histórico de versões
 
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
-(tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
+(tag `v2.10.0`); o programa instalado se atualiza sozinho a partir delas.
 
 ## Próxima versão — Alertas de pausa
 * Janela de aviso, com sinal sonoro, às **14:40** (Pausa NR 17), **17:00** (Pausa para lanche) e
