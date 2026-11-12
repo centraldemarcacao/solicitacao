@@ -241,12 +241,86 @@ def _opcoes_sem_janela() -> dict:
     return opcoes
 
 
-def executar_troca(novo: str) -> None:
-    """Dispara o script de troca (oculto). Depois, o programa deve fechar."""
-    atual = sys.executable
-    script = gerar_script_troca(novo, atual, os.path.dirname(atual), pid=os.getpid())
+def _ambiente_limpo() -> dict:
+    """Ambiente para abrir o novo .exe: sem as variáveis do PyInstaller, para que ele
+    extraia a própria pasta temporária (e não reutilize a deste processo, que será
+    apagada quando este programa fechar)."""
     ambiente = {k: v for k, v in os.environ.items()
                 if not k.startswith("_PYI") and k != "_MEIPASS2"}
     ambiente["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-    subprocess.Popen(["cmd", "/c", script], env=ambiente, close_fds=True,
-                     **_opcoes_sem_janela())
+    return ambiente
+
+
+def aplicar_atualizacao(novo: str, atual: str) -> None:
+    """Troca o .exe SEM script: o Windows não deixa apagar nem sobrescrever um programa
+    em uso, mas deixa RENOMEÁ-LO. Então: atual -> atual.anterior, novo -> atual.
+
+    Se algo falhar, devolve tudo como estava e levanta ErroAtualizacao."""
+    anterior = atual + ".anterior"
+    try:
+        if os.path.exists(anterior):
+            os.remove(anterior)
+        os.replace(atual, anterior)
+    except OSError as exc:
+        raise ErroAtualizacao(f"Não foi possível substituir o programa em uso ({exc}).") from exc
+    try:
+        os.replace(novo, atual)
+    except OSError as exc:
+        try:
+            os.replace(anterior, atual)           # volta a versão que funcionava
+        except OSError:
+            pass
+        raise ErroAtualizacao(f"Não foi possível colocar a nova versão ({exc}).") from exc
+
+
+def reabrir(atual: str) -> None:
+    """Abre o programa (já atualizado) e deixa este processo seguir para o fim.
+    Sem console: o programa é de janela, e nada aqui abre telas de comando."""
+    subprocess.Popen([atual], env=_ambiente_limpo(), close_fds=True,
+                     cwd=os.path.dirname(atual), creationflags=CREATE_NEW_PROCESS_GROUP)
+
+
+def executar_troca(novo: str) -> str:
+    """Atualiza o programa em uso. Depois, o programa deve fechar.
+
+    1) Caminho normal ("direta"): renomeia o .exe em uso, coloca o novo e o reabre.
+       Sem script e sem janelas.
+    2) Reserva ("script"): se o Windows (ou um antivírus) não deixar renomear o
+       programa em uso, um .bat OCULTO espera o programa fechar (tempo limitado) e faz a troca.
+    Retorna "direta", "script" ou "manual" (atualizado, mas o programa novo não abriu
+    sozinho: a pessoa precisa fechar e abrir de novo)."""
+    atual = sys.executable
+    try:
+        aplicar_atualizacao(novo, atual)
+    except ErroAtualizacao:
+        script = gerar_script_troca(novo, atual, os.path.dirname(atual), pid=os.getpid())
+        subprocess.Popen(["cmd", "/c", script], env=_ambiente_limpo(), close_fds=True,
+                         **_opcoes_sem_janela())
+        return "script"
+    try:
+        reabrir(atual)
+    except OSError:
+        return "manual"
+    return "direta"
+
+
+def limpar_restos() -> None:
+    """Ao abrir: apaga o .exe da versão anterior (se já não estiver em uso) e downloads
+    incompletos. Falhas são ignoradas."""
+    if not getattr(sys, "frozen", False):
+        return
+    atual = sys.executable
+    for caminho in (atual + ".anterior", os.path.join(os.path.dirname(atual),
+                                                       "AnotacoesHospitalares.novo.exe.part")):
+        try:
+            os.remove(caminho)
+        except OSError:
+            pass
+
+
+def ficou_pendente() -> bool:
+    """True se há um .exe novo baixado que não foi colocado no lugar (troca falhou)."""
+    if not getattr(sys, "frozen", False):
+        return False
+    return os.path.isfile(os.path.join(os.path.dirname(sys.executable),
+                                       "AnotacoesHospitalares.novo.exe"))

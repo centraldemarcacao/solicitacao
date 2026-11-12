@@ -27,7 +27,7 @@ possa gravar (Documentos, Área de Trabalho). A pasta `dados` é criada ao lado 
 ## Se algo não funcionar
 | Sintoma | O que fazer |
 |---------|-------------|
-| Janela preta repetindo `ping` ao atualizar (v2.9.0) | Defeito do script de troca da v2.9.0 (já corrigido na 2.10.1). Feche a janela, aguarde o programa reabrir e atualize manualmente: baixe o `.exe` em **Releases** e copie por cima do atual (mantenha a pasta `dados`). Nas versões novas, veja `atualizacao.log` ao lado do `.exe`. |
+| Janela preta repetindo `ping` ao atualizar (v2.9.0 e v2.10.0) | Defeito do script de troca antigo (corrigido na 2.10.1, que troca o `.exe` sem script). Nessas versões, aguarde o programa reabrir (ou feche a janela) e atualize manualmente: baixe o `.exe` em **Releases** e copie por cima do atual (mantenha a pasta `dados`). Nas versões novas, consulte `atualizacao.log` ao lado do `.exe`. |
 | Release só com "Source code" (sem `.exe` nem `SHA256.txt`) e nenhuma execução nova em **Actions** | A tag foi criada sem o `v` (ex.: `2.10.0`) em um commit cujo workflow não a reconhecia. Apague a Release e a tag e publique de novo como `v2.10.0`, depois que o commit mais recente da `main` tiver passado no Actions. |
 | Release sem o `.exe` | Veja a aba **Actions**: o passo que falhou aparece em vermelho. |
 | `.exe` da Release com versão antiga | A tag foi criada antes de enviar o código novo. Envie tudo, apague a tag e a Release e crie de novo. |

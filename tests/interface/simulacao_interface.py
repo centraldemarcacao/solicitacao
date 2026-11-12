@@ -948,6 +948,20 @@ check(app.toast._rotulo.cget("text") == "", "erro de rede na verificação autom
 updater.pode_atualizar_sozinho = lambda: True
 app2 = app
 del app2._oferecer_atualizacao
+# troca concluída, mas o programa novo não abriu sozinho: avisa e NÃO fecha
+updater.executar_troca = lambda novo: "manual"
+app._finalizar_atualizacao("novo.exe")
+check(not app.dead and "abra-o novamente" in app.toast._rotulo.cget("text"), "troca sem reabertura automática: avisa para abrir de novo e não fecha")
+# a troca falhou de vez: mostra o erro e continua aberto
+def _falha(novo): raise RuntimeError("preso")
+updater.executar_troca = _falha
+app._finalizar_atualizacao("novo.exe")
+check(not app.dead and "Não foi possível aplicar" in app.toast._rotulo.cget("text"), "troca com erro: mostra o motivo e continua aberto")
+# download anterior que sobrou sem ser aplicado: aviso ao abrir
+updater.ficou_pendente = lambda: True
+n_antes = len(app.after_calls); app._iniciar_atualizacao()
+check(any(ms == 2500 for ms, _ in app.after_calls[n_antes:]), "troca pendente de uma tentativa anterior: aviso ao abrir")
+updater.ficou_pendente = lambda: False
 trocas = []
 updater.executar_troca = lambda novo: trocas.append(novo)
 app._finalizar_atualizacao("novo.exe")

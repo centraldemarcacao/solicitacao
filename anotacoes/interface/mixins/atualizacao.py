@@ -27,6 +27,14 @@ class AtualizacaoMixin:
         self._fila_atualizacao = queue.Queue()
         self._atualizando = False
         self._cancelar_download = threading.Event()
+        try:
+            updater.limpar_restos()
+        except Exception:
+            pass
+        if updater.ficou_pendente():
+            self.after(2500, lambda: self.toast.mostrar(
+                "A última atualização não foi aplicada. Baixe o .exe em Releases e copie por "
+                "cima do atual (veja atualizacao.log).", "aviso", 12000))
         if T.REPOSITORIO_GITHUB:
             self.after(4000, lambda: self._verificar_atualizacao(manual=False))
 
@@ -146,8 +154,12 @@ class AtualizacaoMixin:
         except Exception:
             pass
         try:
-            updater.executar_troca(novo)
+            resultado = updater.executar_troca(novo)
         except Exception as exc:
             self.toast.mostrar(f"Não foi possível aplicar a atualização: {exc}", "erro", 8000)
+            return
+        if resultado == "manual":
+            self.toast.mostrar("Atualização aplicada. Feche o programa e abra-o novamente.",
+                               "sucesso", 10000)
             return
         self.destroy()

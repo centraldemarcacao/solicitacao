@@ -4,13 +4,17 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.10.1 — Correção da atualização automática
-* A troca do `.exe` ao atualizar agora roda **sem janelas** (antes, abria uma janela de console
-  repetindo `ping`, por causa do modo "destacado" do processo).
-* O script de troca espera o programa fechar de verdade, **nunca fica em laço infinito** (no máximo
-  cerca de 1 min de espera e 1,5 min de tentativas), confere o resultado pelos arquivos, restaura a
-  versão anterior se algo falhar e registra o ocorrido em `atualizacao.log` (ao lado do `.exe`).
-* Computadores ainda na v2.9.0 continuam com o comportamento antigo na atualização para a 2.10.x:
-  nesses, baixe o `.exe` na página **Releases** e copie por cima do atual (a pasta `dados` não muda).
+* **Fim da tela de comando ao atualizar.** Antes, a troca do `.exe` dependia de um script `.bat` que
+  ficava repetindo `ping` (abrindo e fechando janelas de console) enquanto esperava o programa fechar.
+  Agora o próprio programa renomeia o `.exe` em uso (o Windows permite), coloca o novo no lugar e o
+  reabre: sem script, sem janelas e sem espera.
+* Se o Windows ou um antivírus não permitir renomear o programa em uso, entra em ação uma reserva: um
+  script **oculto** e com **tempo limite** (não fica em laço), que confere o resultado pelos arquivos,
+  restaura a versão anterior se falhar e registra tudo em `atualizacao.log` (ao lado do `.exe`).
+* Se uma atualização baixada não puder ser aplicada, o programa avisa ao abrir. O `.exe` da versão
+  anterior (`.exe.anterior`) é apagado sozinho na próxima abertura.
+* Computadores ainda na v2.9.0 ou v2.10.0 usam o script antigo ao atualizar para esta versão: nesses,
+  baixe o `.exe` na página **Releases** e copie por cima do atual (a pasta `dados` não muda).
 
 ## 2.10.0 — Alertas de pausa
 * Janela de aviso, com sinal sonoro, às **14:40** (Pausa NR 17), **17:00** (Pausa para lanche) e
