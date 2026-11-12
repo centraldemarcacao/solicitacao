@@ -50,7 +50,9 @@ class AtalhosMixin:
             ("comma", lambda: self.mostrar_pagina("config")),
             ("s", self._atalho_salvar),
         ):
-            for variante in (tecla, tecla.upper()):
+            # Letras valem com e sem Caps Lock; nomes de tecla ("comma") só em minúsculas:
+            # o Tk rejeita "COMMA" e o programa nem abria.
+            for variante in ((tecla, tecla.upper()) if len(tecla) == 1 else (tecla,)):
                 self.bind(f"<Control-{variante}>", lambda _e, a=acao: (self._atalho(a), "break")[1])
         self.bind("<F1>", lambda _e: self._atalho(self.mostrar_atalhos))
 

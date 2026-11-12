@@ -1037,6 +1037,12 @@ from anotacoes.nucleo import diagnostico as _diag, seguranca as _seg, inicializa
 from anotacoes.interface.mixins import bloqueio as bloqueio_gui
 check(not app.seguranca.ativa and not app.esta_bloqueado() and not app.db.backup_criptografado, "sem PIN: programa abre desbloqueado e backups sem criptografia")
 check("<Control-b>" in app.binds and "config" in app.paginas, "Ctrl+B registrado e página Configurações existe")
+def _keysym_valido(seq):
+    ultimo = seq.strip("<>").split("-")[-1]
+    # Tk: letras/dígitos soltos, F1..F12 ou nomes de tecla em minúsculas (comma, Return...).
+    return len(ultimo) == 1 or (ultimo[:1] == "F" and ultimo[1:].isdigit()) or ultimo.islower() or ultimo[:1].isupper() and not ultimo.isupper()
+check(all(_keysym_valido(q) for q in app.binds), "nenhum atalho usa nome de tecla inválido (ex.: COMMA)")
+check("<Control-comma>" in app.binds and "<Control-COMMA>" not in app.binds, "Ctrl+, registrado como <Control-comma>")
 check(any("Bloquear" in a[1] for a in __import__("anotacoes.interface.mixins.atalhos", fromlist=["x"]).ATALHOS), "atalhos novos listados em F1")
 app.mostrar_pagina("config")
 check(app.paginas["config"].mapped and app.lbl_pin_estado.cget("text") == "Desativada" and app.btn_pin_ativar.mapped and not app.btn_pin_alterar.mapped, "Configurações: PIN desativado mostra só 'Ativar PIN'")

@@ -4,6 +4,7 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.11.0 — Segurança, início com o Windows e diagnóstico
+* **Correção antes da publicação:** o atalho Ctrl + , fazia o programa fechar ao abrir ("bad event type or keysym COMMA"). Corrigido e coberto por teste.
 * **PIN ou senha** (Configurações > Segurança): o programa pode abrir e **bloquear sozinho** após 1 a 30
   minutos sem uso (**Ctrl + B** bloqueia na hora). Erros repetidos impõem espera crescente.
 * **Backups criptografados** (AES-256-GCM, arquivos `.dbx`) com a mesma senha; a restauração pede a senha.
