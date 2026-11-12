@@ -29,7 +29,7 @@ if errorlevel 1 goto erro
 
 echo.
 echo [2/3] Gerando o executavel com PyInstaller...
-set OPCOES=--noconfirm --clean --onefile --windowed --name "AnotacoesHospitalares" --collect-all customtkinter --hidden-import PIL._tkinter_finder
+set OPCOES=--noconfirm --clean --onefile --windowed --name "AnotacoesHospitalares" --collect-all customtkinter --hidden-import PIL._tkinter_finder --hidden-import cryptography.hazmat.primitives.ciphers.aead
 if exist assets\icone.ico set OPCOES=%OPCOES% --icon "assets\icone.ico" --add-data "assets\icone.ico;."
 if exist assets\logo.png set OPCOES=%OPCOES% --add-data "assets\logo.png;."
 

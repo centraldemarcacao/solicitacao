@@ -1,3 +1,4 @@
 # Dependências para EXECUTAR o programa
 customtkinter>=5.2.2
 pillow>=10.0
+cryptography>=42

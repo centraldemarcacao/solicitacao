@@ -3,6 +3,21 @@
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
+## 2.11.0 — Segurança, início com o Windows e diagnóstico
+* **PIN ou senha** (Configurações > Segurança): o programa pode abrir e **bloquear sozinho** após 1 a 30
+  minutos sem uso (**Ctrl + B** bloqueia na hora). Erros repetidos impõem espera crescente.
+* **Backups criptografados** (AES-256-GCM, arquivos `.dbx`) com a mesma senha; a restauração pede a senha.
+  Os backups antigos podem ser convertidos com um clique. **Guarde a senha**: sem ela o backup não abre.
+  O PIN protege o uso do programa; o banco em uso continua legível por quem acessa a pasta (veja
+  `docs/seguranca.md`).
+* **Iniciar com o Windows, minimizado**: opção na janela Alertas de pausa; os avisos de pausa funcionam
+  sem abrir o programa à mão. Só uma janela do programa abre por vez.
+* **Diagnóstico** (Configurações): versão, pastas, estado da proteção e **teste de conexão** com GitHub e
+  Supabase, com explicação do problema (certificado, rede, endereço).
+* Teste de interface com o Tk real no GitHub Actions (`tests/interface/fumaca_tk_real.py`), inicialmente
+  sem bloquear a entrega.
+* Nova dependência: `cryptography`.
+
 ## 2.10.1 — Correção da atualização automática
 * **Fim da tela de comando ao atualizar.** Antes, a troca do `.exe` dependia de um script `.bat` que
   ficava repetindo `ping` (abrindo e fechando janelas de console) enquanto esperava o programa fechar.

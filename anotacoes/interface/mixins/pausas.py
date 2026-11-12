@@ -21,6 +21,7 @@ import customtkinter as ctk
 from anotacoes import theme as T
 from anotacoes.interface.icons import icone
 from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
+from anotacoes.nucleo import inicializacao
 from anotacoes.nucleo.pausas import (HORARIOS_PADRAO, MODELOS, interpretar_horario,
                                      marcar_avisada, montar_pausas, pausa_devida)
 
@@ -105,12 +106,14 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
     """Janela "Alertas de pausa": liga/desliga e horários. Não é modal, para que um
     aviso que chegue enquanto ela está aberta possa ser fechado normalmente."""
 
-    def __init__(self, pai, ativo: bool, horarios: dict, ao_salvar) -> None:
+    def __init__(self, pai, ativo: bool, horarios: dict, ao_salvar, inicio_windows=None) -> None:
+        """`inicio_windows`: None = indisponível (só no .exe); True/False = estado atual.
+        `ao_salvar(ativo, horarios, inicio_windows)`."""
         super().__init__(pai, fg_color=T.CARD)
         self._ao_salvar = ao_salvar
         self.title("Alertas de pausa")
         self.resizable(False, False)
-        centralizar(self, pai, 480, 520)
+        centralizar(self, pai, 480, 600)
         self.transient(pai)
 
         ctk.CTkFrame(self, fg_color=T.TEAL, height=6, corner_radius=0).pack(fill="x")
@@ -144,6 +147,24 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
             entrada.pack(side="right")
             entrada.insert(0, horarios.get(chave, HORARIOS_PADRAO[chave]))
             self.entradas[chave] = entrada
+
+        self.chk_inicio = None
+        if inicio_windows is None:
+            alinhar_esquerda(ctk.CTkLabel(
+                corpo, text="Iniciar com o Windows: disponível só no programa instalado (.exe).",
+                font=fonte(12), text_color=T.TEXTO_SUAVE, anchor="w", wraplength=410,
+            )).pack(anchor="w", pady=(14, 0))
+        else:
+            self.chk_inicio = ctk.CTkCheckBox(
+                corpo, text="Abrir o programa ao ligar o computador (minimizado)",
+                font=fonte(14), text_color=T.TEXTO, fg_color=T.TEAL, hover_color=T.TEAL_ESCURO,
+                border_color=T.BORDA_FORTE, checkmark_color=T.SOBRE_COR)
+            (self.chk_inicio.select if inicio_windows else self.chk_inicio.deselect)()
+            self.chk_inicio.pack(anchor="w", pady=(14, 0))
+            alinhar_esquerda(ctk.CTkLabel(
+                corpo, text="Os alertas só tocam com o programa aberto; assim ele já abre sozinho, "
+                            "na barra de tarefas.", font=fonte(12), text_color=T.TEXTO_SUAVE,
+                anchor="w", wraplength=410)).pack(anchor="w", pady=(2, 0))
 
         self.lbl_erro = ctk.CTkLabel(corpo, text="", font=fonte(13, "bold"),
                                      text_color=T.VERMELHO, anchor="w", wraplength=410)
@@ -199,7 +220,8 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
         self.lbl_erro.configure(text=erro or "")
         if erro:
             return
-        self._ao_salvar(bool(self.chk_ativo.get()), horarios)
+        inicio = None if self.chk_inicio is None else bool(self.chk_inicio.get())
+        self._ao_salvar(bool(self.chk_ativo.get()), horarios, inicio)
         self.destroy()
 
 
@@ -279,15 +301,24 @@ class PausasMixin:
                     return
             except Exception:
                 pass
+        inicio = inicializacao.ativo() if inicializacao.suportado() else None
         self._dialogo_horarios = DialogoHorariosPausa(
-            self, self.prefs.alertas_pausa, self.prefs.horarios_pausa, self._aplicar_alertas_pausa)
+            self, self.prefs.alertas_pausa, self.prefs.horarios_pausa,
+            self._aplicar_alertas_pausa, inicio)
 
-    def _aplicar_alertas_pausa(self, ativo: bool, horarios: dict) -> None:
+    def _aplicar_alertas_pausa(self, ativo: bool, horarios: dict, inicio=None) -> None:
         self.prefs.alertas_pausa = ativo
         self.prefs.horarios_pausa = horarios
         guardou = self.prefs.salvar()
         self._pausas = montar_pausas(self.prefs.horarios_pausa)
         self._atualizar_botao_pausas()
+        if inicio is not None and inicio != inicializacao.ativo():
+            try:
+                (inicializacao.ativar if inicio else inicializacao.desativar)()
+            except OSError as exc:
+                self.toast.mostrar(f"Não foi possível alterar o início com o Windows: {exc}",
+                                   "erro", 7000)
+                return
         if not guardou:
             self.toast.mostrar("Alterado, mas não foi possível gravar em preferencias.json.",
                                "aviso", 6000)

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
 from anotacoes.caminhos import pasta_programa
+from anotacoes.nucleo import seguranca
 
 # ----------------------------------------------------------------------
 # Constantes
@@ -43,6 +44,8 @@ MAX_DESCRICAO = 2000
 DIAS_LIXEIRA = 30        # dias que um registro excluído fica na lixeira
 BACKUPS_MANTER = 14      # quantidade de backups "backup_*.db" guardados
 SEGURANCA_MANTER = 5     # cópias "antes_da_restauracao_*.db" guardadas
+PREFIXOS_BACKUP = ("backup_", "antes_da_restauracao_")
+EXTENSOES_BACKUP = (".db", seguranca.EXTENSAO_CRIPTOGRAFADO)
 FORMATO_DATA = "%Y-%m-%d %H:%M:%S"
 NOME_ARQUIVO = "anotacoes_hospitalares.db"
 
@@ -241,6 +244,11 @@ class Database:
 
     def __init__(self, caminho: Optional[str] = None) -> None:
         self.caminho = caminho or caminho_banco()
+        # Criptografia dos backups (veja nucleo/seguranca.py). Com `backup_criptografado`
+        # ligado, os backups saem como .dbx e dependem de `backup_segredo` (a senha da
+        # sessão, informada ao desbloquear); sem ela, backups automáticos são adiados.
+        self.backup_criptografado = False
+        self.backup_segredo: Optional[str] = None
         self._inicializar()
 
     # ------------------------------------------------------------------
@@ -584,43 +592,98 @@ class Database:
         os.makedirs(pasta, exist_ok=True)
         return pasta
 
+    def _extensao_backup(self) -> str:
+        return seguranca.EXTENSAO_CRIPTOGRAFADO if self.backup_criptografado else ".db"
+
+    def backup_bloqueado(self) -> bool:
+        """True se os backups devem ser criptografados mas a senha ainda não foi informada."""
+        return self.backup_criptografado and not self.backup_segredo
+
     def _copiar_para(self, destino: str) -> None:
         """Copia o banco de forma consistente (API de backup do SQLite) e
-        troca o arquivo de destino só no fim, para nunca deixar meia-cópia."""
-        provisorio = destino + ".tmp"
+        troca o arquivo de destino só no fim, para nunca deixar meia-cópia.
+        Destino .dbx: o arquivo é gravado criptografado (a cópia limpa é temporária)."""
+        cifrar = destino.endswith(seguranca.EXTENSAO_CRIPTOGRAFADO)
+        provisorio = destino + (".plain.tmp" if cifrar else ".tmp")
         if os.path.exists(provisorio):
             os.remove(provisorio)
         origem = self._conectar()
         copia = sqlite3.connect(provisorio)
         try:
             origem.backup(copia)
-        finally:
+        except BaseException:
             copia.close()
             origem.close()
-        os.replace(provisorio, destino)
+            self._remover_se_existe(provisorio)
+            raise
+        copia.close()
+        origem.close()
+        if not cifrar:
+            os.replace(provisorio, destino)
+            return
+        try:
+            seguranca.criptografar_arquivo(provisorio, destino, self.backup_segredo)
+        finally:
+            self._remover_se_existe(provisorio)
+
+    @staticmethod
+    def _remover_se_existe(caminho: str) -> None:
+        try:
+            os.remove(caminho)
+        except OSError:
+            pass
 
     def fazer_backup(self, nome: Optional[str] = None) -> str:
         """Cria um backup agora e aplica a rotação. Retorna o caminho do arquivo."""
-        nome = nome or f"backup_{datetime.now():%Y-%m-%d_%H%M%S}.db"
+        if self.backup_bloqueado():
+            raise RuntimeError("Os backups são criptografados: desbloqueie o programa "
+                               "(informe o PIN) para criar backups.")
+        nome = nome or f"backup_{datetime.now():%Y-%m-%d_%H%M%S}{self._extensao_backup()}"
         destino = os.path.join(self.pasta_backups(), nome)
         self._copiar_para(destino)
         self._aplicar_rotacao()
         return destino
 
     def backup_automatico(self, sobrescrever: bool = False) -> Optional[str]:
-        """Backup diário (um arquivo por dia: backup_AAAA-MM-DD.db).
+        """Backup diário (um arquivo por dia: backup_AAAA-MM-DD.db, ou .dbx se criptografado).
 
         Sem `sobrescrever`, só cria se ainda não houver o de hoje (uso ao abrir).
         Com `sobrescrever`, atualiza o de hoje (uso ao fechar) — mas nunca troca
         uma cópia que tem dados por uma cópia de banco vazio.
+        Com a criptografia ligada e o programa ainda bloqueado, nada é feito (None).
         Retorna o caminho criado, ou None se nada foi feito.
         """
-        nome = f"backup_{datetime.now():%Y-%m-%d}.db"
-        destino = os.path.join(self.pasta_backups(), nome)
-        if os.path.exists(destino):
-            if not sobrescrever or self.total_registros() == 0:
-                return None
-        return self.fazer_backup(nome)
+        if self.backup_bloqueado():
+            return None
+        base = f"backup_{datetime.now():%Y-%m-%d}"
+        pasta = self.pasta_backups()
+        existentes = [os.path.join(pasta, base + e)
+                      for e in (".db", seguranca.EXTENSAO_CRIPTOGRAFADO)
+                      if os.path.exists(os.path.join(pasta, base + e))]
+        if existentes and (not sobrescrever or self.total_registros() == 0):
+            return None
+        criado = self.fazer_backup(base + self._extensao_backup())
+        for antigo in existentes:           # nunca deixa a cópia do dia nos dois formatos
+            if os.path.abspath(antigo) != os.path.abspath(criado):
+                self._remover_se_existe(antigo)
+        return criado
+
+    def criptografar_backups_existentes(self) -> int:
+        """Converte os backups .db (texto aberto) para .dbx criptografados e apaga os
+        originais. Retorna quantos foram convertidos. Exige `backup_segredo`."""
+        if not self.backup_segredo:
+            raise RuntimeError("Informe o PIN antes de criptografar os backups.")
+        pasta = self.pasta_backups()
+        convertidos = 0
+        for nome in sorted(os.listdir(pasta)):
+            if not nome.endswith(".db") or not nome.startswith(PREFIXOS_BACKUP):
+                continue
+            origem = os.path.join(pasta, nome)
+            destino = origem[:-3] + seguranca.EXTENSAO_CRIPTOGRAFADO
+            seguranca.criptografar_arquivo(origem, destino, self.backup_segredo)
+            os.remove(origem)       # só depois de gravar o criptografado sem erro
+            convertidos += 1
+        return convertidos
 
     def _aplicar_rotacao(self) -> None:
         """Mantém só os backups mais recentes de cada tipo."""
@@ -629,7 +692,7 @@ class Database:
                                 ("antes_da_restauracao_", SEGURANCA_MANTER)):
             arquivos = []
             for nome in os.listdir(pasta):
-                if nome.startswith(prefixo) and nome.endswith(".db"):
+                if nome.startswith(prefixo) and nome.endswith(EXTENSOES_BACKUP):
                     caminho = os.path.join(pasta, nome)
                     try:
                         arquivos.append((os.path.getmtime(caminho), nome, caminho))
@@ -666,23 +729,26 @@ class Database:
 
     def listar_backups(self) -> list:
         """Backups existentes, do mais recente ao mais antigo. Cada item:
-        {'caminho', 'nome', 'data', 'tamanho', 'registros'}."""
+        {'caminho', 'nome', 'data', 'tamanho', 'registros', 'criptografado'}."""
         pasta = self.pasta_backups()
         itens = []
         for nome in os.listdir(pasta):
-            if not nome.endswith(".db") or not nome.startswith(("backup_", "antes_da_restauracao_")):
+            if not nome.endswith(EXTENSOES_BACKUP) or not nome.startswith(PREFIXOS_BACKUP):
                 continue
             caminho = os.path.join(pasta, nome)
             try:
                 info = os.stat(caminho)
             except OSError:
                 continue
+            cifrado = nome.endswith(seguranca.EXTENSAO_CRIPTOGRAFADO)
             itens.append({
                 "caminho": caminho,
                 "nome": nome,
                 "data": datetime.fromtimestamp(info.st_mtime),
                 "tamanho": info.st_size,
-                "registros": self._contar_em(caminho),
+                "criptografado": cifrado,
+                # backup criptografado: só dá para contar depois de abrir com a senha
+                "registros": None if cifrado else self._contar_em(caminho),
             })
         itens.sort(key=lambda i: (i["data"], i["nome"]), reverse=True)
         return itens
@@ -706,16 +772,35 @@ class Database:
         finally:
             conn.close()
 
-    def restaurar_backup(self, caminho: str) -> str:
+    def restaurar_backup(self, caminho: str, segredo: Optional[str] = None) -> str:
         """Substitui os dados atuais pelo conteúdo de um backup.
 
         Antes, guarda uma cópia de segurança do estado atual (retornada).
+        Backup criptografado (.dbx): usa `segredo` ou, se omitido, a senha da sessão;
+        senha errada levanta seguranca.SenhaIncorreta (nada é alterado).
         Lança ValueError se o arquivo não for um backup válido (nada é alterado).
         """
         caminho = os.path.abspath(caminho)
+        if not seguranca.arquivo_criptografado(caminho):
+            return self._restaurar_de(caminho)
+        senha = segredo or self.backup_segredo
+        if not senha:
+            raise seguranca.SenhaIncorreta("Informe a senha deste backup.")
+        if not seguranca.criptografia_disponivel():
+            raise ValueError("Este computador não consegue abrir backups criptografados "
+                             "(componente de criptografia ausente).")
+        temporario = os.path.join(self.pasta_backups(),
+                                  f"restauracao_{uuid.uuid4().hex}.tmp")
+        try:
+            seguranca.descriptografar_arquivo(caminho, temporario, senha)
+            return self._restaurar_de(temporario)
+        finally:
+            self._remover_se_existe(temporario)      # nunca deixa a cópia limpa para trás
+
+    def _restaurar_de(self, caminho: str) -> str:
         self._validar_backup(caminho)
-        seguranca = self.fazer_backup(
-            f"antes_da_restauracao_{datetime.now():%Y-%m-%d_%H%M%S}.db"
+        seguranca_copia = self.fazer_backup(
+            f"antes_da_restauracao_{datetime.now():%Y-%m-%d_%H%M%S}{self._extensao_backup()}"
         )
         origem = self._abrir_somente_leitura(caminho)
         destino = self._conectar()
@@ -726,7 +811,7 @@ class Database:
             destino.close()
         self._inicializar()  # backups antigos podem não ter as colunas novas
         self.sync_pos_restauracao()
-        return seguranca
+        return seguranca_copia
 
     # ------------------------------------------------------------------
     # Sincronização com a nuvem (usado por nuvem/sincronizacao.py)

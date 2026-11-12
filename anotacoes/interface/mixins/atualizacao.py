@@ -17,6 +17,7 @@ import customtkinter as ctk
 
 from anotacoes import theme as T
 from anotacoes.atualizacao import updater
+from anotacoes.nucleo import instancia
 from anotacoes.interface.widgets import DialogoConfirmacao, centralizar, fonte, tornar_modal
 
 
@@ -78,6 +79,10 @@ class AtualizacaoMixin:
 
     # --- Oferta e download ----------------------------------------------
     def _oferecer_atualizacao(self, info) -> None:
+        if self.state() == "iconic":
+            # Aberto minimizado (início com o Windows): não surge diálogo escondido; tenta depois.
+            self.after(60_000, lambda: self._oferecer_atualizacao(info))
+            return
         if not updater.pode_atualizar_sozinho():
             self.toast.mostrar(
                 f"Versão {info.versao} disponível, mas este programa não pode se "
@@ -153,12 +158,15 @@ class AtualizacaoMixin:
             self.db.backup_automatico(sobrescrever=True)
         except Exception:
             pass
+        instancia.liberar()      # o programa novo precisa conseguir abrir enquanto este fecha
         try:
             resultado = updater.executar_troca(novo)
         except Exception as exc:
+            instancia.adquirir(0)
             self.toast.mostrar(f"Não foi possível aplicar a atualização: {exc}", "erro", 8000)
             return
         if resultado == "manual":
+            instancia.adquirir(0)
             self.toast.mostrar("Atualização aplicada. Feche o programa e abra-o novamente.",
                                "sucesso", 10000)
             return

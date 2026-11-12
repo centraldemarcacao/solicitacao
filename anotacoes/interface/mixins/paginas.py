@@ -17,6 +17,7 @@ import os
 import customtkinter as ctk
 
 from anotacoes import theme as T
+from anotacoes.nucleo import seguranca
 from anotacoes.nucleo.database import DIAS_LIXEIRA, BACKUPS_MANTER, validar_campos
 from anotacoes.interface.icons import icone
 from anotacoes.nucleo.util import (
@@ -376,7 +377,8 @@ class PaginasExtrasMixin:
         self._backups_por_iid = {str(i): item for i, item in enumerate(itens)}
         self.tabela_backup.preencher([
             (str(i), (item["data"].strftime("%d/%m/%Y %H:%M"), item["nome"],
-                      "—" if item["registros"] is None else str(item["registros"]),
+                      "criptografado" if item.get("criptografado")
+                      else "—" if item["registros"] is None else str(item["registros"]),
                       formatar_tamanho(item["tamanho"])), "neutra")
             for i, item in enumerate(itens)
         ])
@@ -389,7 +391,9 @@ class PaginasExtrasMixin:
         self.lbl_info_backup.configure(
             text=(f"Uma cópia é feita automaticamente ao abrir e ao fechar o programa "
                   f"(últimas {BACKUPS_MANTER} guardadas).  Pasta: {self.db.pasta_backups()}\n"
-                  "Dica: de vez em quando, copie a pasta de backups para um pendrive ou outro local.")
+                  "Dica: de vez em quando, copie a pasta de backups para um pendrive ou outro local."
+                  + ("\nBackups .dbx são criptografados: só abrem com a senha usada ao criá-los."
+                     if any(i.get("criptografado") for i in itens) else ""))
         )
 
     def fazer_backup_agora(self) -> None:
@@ -419,8 +423,16 @@ class PaginasExtrasMixin:
         if not confirmou:
             return
         try:
-            seguranca = self.db.restaurar_backup(item["caminho"])
-        except ValueError as exc:
+            try:
+                copia_anterior = self.db.restaurar_backup(item["caminho"])
+            except seguranca.SenhaIncorreta:
+                # A senha atual não abre este backup (criado com outra senha): pergunta.
+                from anotacoes.interface.mixins.bloqueio import DialogoSenhaBackup
+                senha = DialogoSenhaBackup.perguntar(self, item["nome"])
+                if not senha:
+                    return
+                copia_anterior = self.db.restaurar_backup(item["caminho"], segredo=senha)
+        except ValueError as exc:     # inclui senha incorreta e arquivo inválido
             self.toast.mostrar(str(exc), "erro", 6000)
             return
         except Exception as exc:
@@ -429,6 +441,6 @@ class PaginasExtrasMixin:
         self.atualizar_tudo()
         self.atualizar_backups()
         self.toast.mostrar(
-            f"Backup restaurado. Cópia do estado anterior: {os.path.basename(seguranca)}",
+            f"Backup restaurado. Cópia do estado anterior: {os.path.basename(copia_anterior)}",
             "sucesso", 7000,
         )

@@ -28,6 +28,8 @@ from anotacoes.caminhos import localizar_arquivo
 from anotacoes.interface.icons import icone
 from anotacoes.interface.mixins.atalhos import AtalhosMixin
 from anotacoes.interface.mixins.atualizacao import AtualizacaoMixin
+from anotacoes.interface.mixins.bloqueio import BloqueioMixin
+from anotacoes.interface.mixins.configuracoes import ConfiguracoesMixin
 from anotacoes.interface.mixins.exportacao import ExportacaoMixin
 from anotacoes.interface.mixins.identidade import IdentidadeMixin
 from anotacoes.interface.mixins.nuvem import NuvemMixin
@@ -58,6 +60,7 @@ from anotacoes.nucleo.database import (
     normalizar,
     validar_campos,
 )
+from anotacoes.nucleo import inicializacao
 from anotacoes.nucleo.identidade import Identidade, titulo_completo
 from anotacoes.nucleo.preferencias import Preferencias
 from anotacoes.nucleo.util import (
@@ -81,6 +84,7 @@ PAG_HIST = "historico"
 PAG_LIXO = "lixeira"
 PAG_BACKUP = "backup"
 PAG_NUVEM = "nuvem"
+PAG_CONFIG = "config"       # sem item no menu: abre pela engrenagem do rodapé (Ctrl + ,)
 
 # Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
 LARGURA_BASE, ALTURA_BASE = 1240, 780
@@ -104,8 +108,9 @@ COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "r
 
 
 class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
-          NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, PausasMixin, ctk.CTk):
-    def __init__(self) -> None:
+          NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, PausasMixin, BloqueioMixin,
+          ConfiguracoesMixin, ctk.CTk):
+    def __init__(self, minimizado: bool = False) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
         super().__init__()
@@ -115,6 +120,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self._dpi = self._detectar_dpi()
         self._fator_escala = self._ajustar_escala_a_tela()
 
+        self._minimizado = minimizado   # aberto pelo início automático do Windows
         self.title(titulo_completo())
         self.geometry(f"{LARGURA_BASE}x{ALTURA_BASE}")
         self.minsize(MINIMO_LARGURA, MINIMO_ALTURA)
@@ -159,6 +165,10 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.report_callback_exception = self._erro_inesperado
         self.protocol("WM_DELETE_WINDOW", self._ao_fechar)
 
+        # PIN e criptografia dos backups: lidos antes do backup de abertura, que é
+        # adiado (se criptografado) até o desbloqueio.
+        self._iniciar_seguranca()
+
         # Rotina de abertura: limpa a lixeira antiga e garante o backup do dia.
         aviso_inicial = None
         try:
@@ -181,6 +191,10 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.toast.mostrar(aviso_inicial, "erro", 8000)
         self._iniciar_atualizacao()
         self._iniciar_pausas()
+        self._iniciar_bloqueio()
+        inicializacao.corrigir_caminho()
+        if minimizado:
+            self.after(300, self.iconify)
 
     # ==================================================================
     # Escala e tamanho da janela
@@ -246,7 +260,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
                     and 0 <= y <= self.winfo_screenheight() - 150):
                 posicao = f"+{x}+{y}"
             self.geometry(f"{largura}x{altura}{posicao}")
-            if info.get("max"):
+            if info.get("max") and not self._minimizado:
                 self.after(80, lambda: self.state("zoomed"))
         except Exception:
             pass  # preferência inválida: mantém o tamanho padrão
@@ -450,19 +464,26 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             font=fonte(11), text_color=T.NAV_SUAVE, wraplength=220, anchor="w",
         )
         self._rodape_botao = ctk.CTkFrame(barra, fg_color="transparent")
+        # Quatro botões na linha do rodapé: os de ícone ficam um pouco menores (34 px).
+        ctk.CTkButton(
+            self._rodape_botao, text="", width=34, height=30,
+            image=icone("gear", T.NAV_TEXTO, 18),
+            fg_color="transparent", border_width=1, border_color=T.NAV_LINHA,
+            hover_color=T.NAVY_HOVER, command=lambda: self.mostrar_pagina(PAG_CONFIG),
+        ).pack(side="right", padx=(6, 0))
         self._btn_tema = ctk.CTkButton(
-            self._rodape_botao, text="", width=38, height=30,
+            self._rodape_botao, text="", width=34, height=30,
             image=icone("moon" if T.TEMA_ATUAL == "claro" else "sun", T.NAV_TEXTO, 18),
             fg_color="transparent", border_width=1, border_color=T.NAV_LINHA,
             hover_color=T.NAVY_HOVER, command=self.alternar_tema,
         )
-        self._btn_tema.pack(side="right", padx=(8, 0))
+        self._btn_tema.pack(side="right", padx=(6, 0))
         ctk.CTkButton(
-            self._rodape_botao, text="", width=38, height=30,
+            self._rodape_botao, text="", width=34, height=30,
             image=icone("edit", T.NAV_TEXTO, 18),
             fg_color="transparent", border_width=1, border_color=T.NAV_LINHA,
             hover_color=T.NAVY_HOVER, command=self.personalizar_identidade,
-        ).pack(side="right", padx=(8, 0))
+        ).pack(side="right", padx=(6, 0))
         ctk.CTkButton(
             self._rodape_botao, text="Atualizações", height=30,
             font=fonte(12, "bold"), fg_color="transparent", text_color=T.NAV_TEXTO,
@@ -560,6 +581,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             PAG_LIXO: self._criar_pagina_lixeira(self.area),
             PAG_BACKUP: self._criar_pagina_backup(self.area),
             PAG_NUVEM: self._criar_pagina_nuvem(self.area),
+            PAG_CONFIG: self._criar_pagina_config(self.area),
         }
         self.toast = Notificacao(self.area)
 
@@ -581,6 +603,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.atualizar_backups()
         elif chave == PAG_NUVEM:
             self.atualizar_nuvem()
+        elif chave == PAG_CONFIG:
+            self.atualizar_config()
         else:
             self.ent_contato.focus_set()
 

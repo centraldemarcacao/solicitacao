@@ -15,6 +15,9 @@ entregue como um único `.exe` que se atualiza sozinho.
 * **Desfazer** (Ctrl+Z), atalhos de teclado (F1 mostra todos) e tema claro/escuro.
 * **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline.
 * **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); horários editáveis e liga/desliga no sino do menu (Ctrl + L).
+* **Segurança (opcional)**: PIN/senha, bloqueio por inatividade (Ctrl + B bloqueia na hora) e backups criptografados (AES-256). Veja `docs/seguranca.md`.
+* **Iniciar com o Windows**, minimizado, para os alertas de pausa não dependerem de abrir o programa.
+* **Configurações** (engrenagem do menu, Ctrl + ,): segurança e **diagnóstico** (versão, pastas e teste de conexão com GitHub e Supabase).
 * **Personalizar**: nome, subtítulo e logo por computador.
 * **Atualização automática** pelo GitHub Releases, com conferência SHA-256.
 
@@ -32,6 +35,10 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   ├── util.py            #     validações e formatação
 │   │   ├── preferencias.py    #     preferências do usuário
 │   │   ├── pausas.py          #     horários dos alertas de pausa
+│   │   ├── seguranca.py       #     PIN, bloqueio e criptografia dos backups
+│   │   ├── inicializacao.py   #     iniciar com o Windows
+│   │   ├── instancia.py       #     uma janela só (mutex)
+│   │   ├── diagnostico.py     #     informações e teste de conexão
 │   │   ├── certificados.py    #     HTTPS: certificados do Windows e ca-extra.pem
 │   │   ├── exportar.py        #     CSV e página de impressão
 │   │   └── identidade.py      #     nome, subtítulo, logo e ícone
@@ -49,7 +56,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 ├── assets/                    # ícone e logo
 ├── supabase/setup.sql         # tabela e regras de segurança da nuvem
 ├── scripts/build.bat          # gera o .exe no seu computador
-├── docs/                      # guias (arquitetura, publicar versão, nuvem, personalizar)
+├── docs/                      # guias (segurança, arquitetura, publicar versão, nuvem, personalizar)
 ├── .github/workflows/         # CI: testa, gera o .exe e publica Releases
 ├── CHANGELOG.md               # histórico de versões
 ├── requirements.txt           # dependências de execução

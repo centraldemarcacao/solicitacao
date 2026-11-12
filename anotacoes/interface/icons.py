@@ -177,8 +177,19 @@ def _bell_off(d, c):
     _linha(d, [(10, 54), (54, 8)], c, 5)
 
 
+def _gear(d, c):
+    import math
+    for k in range(8):                                   # dentes
+        a = math.radians(k * 45)
+        _linha(d, [(32 + 17 * math.cos(a), 32 + 17 * math.sin(a)),
+                   (32 + 25 * math.cos(a), 32 + 25 * math.sin(a))], c, 8)
+    d.ellipse(_caixa(12, 12, 52, 52), fill=c)            # corpo
+    d.ellipse(_caixa(24, 24, 40, 40), fill=(0, 0, 0, 0)) # furo central
+
+
 _DESENHOS = {
     "moon": _moon,
+    "gear": _gear,
     "bell": _bell,
     "bell_off": _bell_off,
     "cloud": _cloud,

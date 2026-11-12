@@ -24,7 +24,9 @@ ATALHOS = (
     ("Ctrl + P", "Imprimir a lista"),
     ("Ctrl + Z", "Desfazer a última ação (status, exclusão ou edição)"),
     ("Ctrl + T", "Alternar entre tema claro e escuro"),
-    ("Ctrl + L", "Ligar ou desligar os alertas de pausa (14:40, 17:00 e 18:10)"),
+    ("Ctrl + L", "Ligar ou desligar os alertas de pausa"),
+    ("Ctrl + B", "Bloquear o programa (quando há PIN)"),
+    ("Ctrl + ,", "Abrir as Configurações"),
     ("F2", "Editar o registro selecionado"),
     ("Enter / duplo clique", "Abrir os detalhes do registro"),
     ("Delete", "Excluir (enviar para a lixeira)"),
@@ -35,7 +37,7 @@ ATALHOS = (
 class AtalhosMixin:
     """Requer: self.mostrar_pagina, self.ent_contato, self.busca, self.toast, self.db,
     self.atualizar_tudo, self.exportar_csv, self.imprimir_lista, self.alternar_tema,
-    self.alternar_alertas_pausa."""
+    self.alternar_alertas_pausa, self.esta_bloqueado, self.bloquear."""
 
     def _iniciar_atalhos(self) -> None:
         self._pilha_desfazer = []
@@ -44,11 +46,19 @@ class AtalhosMixin:
             ("e", self._atalho_exportar), ("p", self._atalho_imprimir),
             ("z", self._atalho_desfazer), ("t", lambda: self.alternar_tema()),
             ("l", lambda: self.alternar_alertas_pausa()),
+            ("b", lambda: self.bloquear()),
+            ("comma", lambda: self.mostrar_pagina("config")),
             ("s", self._atalho_salvar),
         ):
             for variante in (tecla, tecla.upper()):
-                self.bind(f"<Control-{variante}>", lambda _e, a=acao: (a(), "break")[1])
-        self.bind("<F1>", lambda _e: self.mostrar_atalhos())
+                self.bind(f"<Control-{variante}>", lambda _e, a=acao: (self._atalho(a), "break")[1])
+        self.bind("<F1>", lambda _e: self._atalho(self.mostrar_atalhos))
+
+    def _atalho(self, acao) -> None:
+        """Executa um atalho, exceto com o programa bloqueado (nada de exportar ou abrir
+        telas por trás da tela de PIN)."""
+        if not self.esta_bloqueado():
+            acao()
 
     # --- Navegação por teclado -------------------------------------------
     def _atalho_novo(self) -> None:

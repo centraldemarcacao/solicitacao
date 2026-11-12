@@ -95,7 +95,11 @@ class Widget:
     def winfo_screenheight(self): return SCREEN['h']
     def update_idletasks(self): pass
     def attributes(self, *a): pass
-    def deiconify(self): pass
+    def deiconify(self): self._estado = 'normal'
+    def iconify(self): self._estado = 'iconic'
+    def withdraw(self): self._estado = 'withdrawn'
+    def bind_all(self, seq=None, fn=None, add=None):
+        self.binds_all = getattr(self, 'binds_all', {}); self.binds_all.setdefault(seq, []).append(fn)
     def bell(self): self.bips = getattr(self, 'bips', 0) + 1
     def title(self, t=None): self._title = t
     def geometry(self, g=None): self._geo = g
@@ -1025,6 +1029,146 @@ _Relogio.agora = _dt(2026, 11, 13, 12, 0, 0)
 app._ciclo_pausas(); check(app._dialogo_pausa is not None and app._dialogo_pausa._title == "Pausa para lanche", "novo horário (12:00) passa a avisar")
 app.alternar_alertas_pausa(); check(app.prefs.alertas_pausa is False and "desativados" in app.toast._rotulo.cget("text"), "Ctrl+L desliga direto")
 app.alternar_alertas_pausa(); check(app.prefs.alertas_pausa is True and "12:00" in app.toast._rotulo.cget("text"), "Ctrl+L liga e mostra os horários atuais")
+
+# --- segurança: PIN, bloqueio, backups criptografados, configurações, diagnóstico ---
+import time as _time, threading as _threading
+import customtkinter as _ctk
+from anotacoes.nucleo import diagnostico as _diag, seguranca as _seg, inicializacao as _ini
+from anotacoes.interface.mixins import bloqueio as bloqueio_gui
+check(not app.seguranca.ativa and not app.esta_bloqueado() and not app.db.backup_criptografado, "sem PIN: programa abre desbloqueado e backups sem criptografia")
+check("<Control-b>" in app.binds and "config" in app.paginas, "Ctrl+B registrado e página Configurações existe")
+check(any("Bloquear" in a[1] for a in __import__("anotacoes.interface.mixins.atalhos", fromlist=["x"]).ATALHOS), "atalhos novos listados em F1")
+app.mostrar_pagina("config")
+check(app.paginas["config"].mapped and app.lbl_pin_estado.cget("text") == "Desativada" and app.btn_pin_ativar.mapped and not app.btn_pin_alterar.mapped, "Configurações: PIN desativado mostra só 'Ativar PIN'")
+check(len(app.quadro_info.kids) >= 18 and any(k.cget("text") == "Versão do programa" for k in app.quadro_info.kids), "Diagnóstico: informações preenchidas")
+
+# ativar o PIN
+app.abrir_dialogo_pin("criar"); dlg = app.winfo_children()[-1]
+check(type(dlg).__name__ == "DialogoPin" and dlg.modo == "criar", "janela 'Ativar o PIN' abre")
+dlg.ent_novo.insert(0, "12"); dlg.ent_confirma.insert(0, "12"); dlg._confirmar()
+check("pelo menos" in dlg.lbl_erro.cget("text") and not dlg.dead and not app.seguranca.ativa, "PIN curto demais é recusado")
+dlg.ent_novo.text = "senha-1234"; dlg.ent_confirma.text = "senha-9999"; dlg._confirmar()
+check("não são iguais" in dlg.lbl_erro.cget("text") and not dlg.dead, "confirmação diferente é recusada")
+app.db.fazer_backup("backup_2020-01-01_000000.db")      # backup antigo em texto aberto
+dlg.ent_confirma.text = "senha-1234"; dlg._confirmar()
+check(dlg.dead and app.seguranca.ativa and app.seguranca.verificar("senha-1234"), "PIN ativado")
+check(app.db.backup_criptografado and app.db.backup_segredo == "senha-1234", "backups passam a ser criptografados")
+check(not os.path.exists(os.path.join(app.db.pasta_backups(), "backup_2020-01-01_000000.db")) and os.path.exists(os.path.join(app.db.pasta_backups(), "backup_2020-01-01_000000.dbx")), "backup antigo convertido para criptografado")
+check(os.path.exists(os.path.join(tmp, "seguranca.json")) and "senha-1234" not in open(os.path.join(tmp, "seguranca.json"), encoding="utf-8").read(), "seguranca.json existe e não guarda o PIN")
+check(app.lbl_pin_estado.cget("text") == "Ativada" and app.btn_pin_alterar.mapped and not app.btn_pin_ativar.mapped and app.grp_pin_opcoes.mapped, "Configurações: opções do PIN aparecem")
+
+# bloqueio
+vistas = []
+filho = _ctk.CTkToplevel(app)                                  # "diálogo aberto" (ex.: detalhes)
+app.bloquear()
+check(app.esta_bloqueado() and app._painel_bloqueio.mapped and filho._estado == "withdrawn", "bloquear: painel cobre a janela e esconde diálogos abertos")
+app._atalho(lambda: vistas.append(1)); check(vistas == [], "atalhos não executam enquanto bloqueado")
+app.bloquear(); check(len(app.winfo_children()) >= 1, "bloquear de novo não duplica o painel")
+app._ent_pin.text = "errada"; app._tentar_desbloquear()
+check(app.esta_bloqueado() and "incorretos" in app._lbl_pin_erro.cget("text") and app._ent_pin.text == "", "PIN errado: continua bloqueado e limpa o campo")
+app._ent_pin.text = "errada"; app._tentar_desbloquear(); app._ent_pin.text = "errada"; app._tentar_desbloquear()
+check("Aguarde" in app._lbl_pin_erro.cget("text"), "3º erro: espera obrigatória")
+app._ent_pin.text = "senha-1234"; app._tentar_desbloquear()
+check(app.esta_bloqueado() and "Aguarde" in app._lbl_pin_erro.cget("text"), "PIN certo durante a espera ainda não entra")
+app._limite_pin.acertou()
+app.db.backup_segredo = None; painel = app._painel_bloqueio
+app._ent_pin.text = "senha-1234"; app._tentar_desbloquear()
+check(not app.esta_bloqueado() and painel.dead and filho._estado == "normal", "PIN certo: desbloqueia e mostra os diálogos de volta")
+check(app.db.backup_segredo == "senha-1234", "senha da sessão guardada só na memória para os backups")
+
+# bloqueio por inatividade
+app._ultima_atividade = _time.monotonic() - 60; app._ciclo_bloqueio(); check(not app.esta_bloqueado(), "1 min parado: ainda desbloqueado (limite padrão 5 min)")
+app._ultima_atividade = _time.monotonic() - 6 * 60; app._ciclo_bloqueio(); check(app.esta_bloqueado(), "6 min parado: bloqueia sozinho")
+app._ent_pin.text = "senha-1234"; app._tentar_desbloquear(); check(not app.esta_bloqueado(), "desbloqueia de novo")
+app._ao_escolher_bloqueio("1 minuto"); check(app.seguranca.bloqueio_minutos == 1, "tempo de bloqueio configurável")
+app._ultima_atividade = _time.monotonic() - 90; app._ciclo_bloqueio(); check(app.esta_bloqueado(), "com 1 min configurado, 90 s parado bloqueia")
+app._ent_pin.text = "senha-1234"; app._tentar_desbloquear()
+check("bloqueio" in str(sorted(app.binds_all)) or "<Motion>" in app.binds_all, "atividade do mouse/teclado monitorada (bind_all)")
+
+# backups criptografados na interface
+app.mostrar_pagina("backup"); app.fazer_backup_agora()
+tab = app.tabela_backup.tree
+linhas = [tab.rows[i]["values"] for i in tab.get_children()]
+check(any(v[2] == "criptografado" and v[1].endswith(".dbx") for v in linhas), "página Backup lista backups .dbx como 'criptografado'")
+novo_id = app.db.inserir("Paciente Depois", "x", "depois do backup")
+ALVO = "backup_2020-01-01_000000.dbx"          # criado com "senha-1234"
+def _selecionar_backup(nome):
+    app.atualizar_backups()                       # a lista muda a cada restauração (cópia de segurança nova)
+    iid = [i for i in tab.get_children() if tab.rows[i]["values"][1] == nome][0]
+    tab.selection_set(iid)
+RESP["v"] = True
+_selecionar_backup(ALVO); app.restaurar_backup_selecionado()
+check("restaurado" in app.toast._rotulo.cget("text"), "restaurar backup criptografado com a senha da sessão")
+app.db.backup_segredo = "outra-senha"                       # sessão com outra senha: o backup pede a senha dele
+perguntas = []
+bloqueio_gui.DialogoSenhaBackup.perguntar = classmethod(lambda cls, pai, nome: (perguntas.append(nome), "senha-1234")[1])
+_selecionar_backup(ALVO); app.restaurar_backup_selecionado()
+check(perguntas and "restaurado" in app.toast._rotulo.cget("text"), "senha diferente: pergunta a senha do backup e restaura")
+bloqueio_gui.DialogoSenhaBackup.perguntar = classmethod(lambda cls, pai, nome: "errada")
+_selecionar_backup(ALVO); app.restaurar_backup_selecionado()
+check("incorreta" in app.toast._rotulo.cget("text").lower(), "senha do backup errada: mostra erro e não restaura")
+app.db.backup_segredo = "senha-1234"
+
+# configurações: criptografia liga/desliga
+app.alternar_criptografia_backups(False)
+check(not app.db.backup_criptografado and not app.seguranca.criptografar_backups, "desligar a criptografia: novos backups sem .dbx")
+app.alternar_criptografia_backups(True)
+check(app.db.backup_criptografado and app.seguranca.criptografar_backups, "ligar a criptografia de novo")
+app.db.backup_segredo = None; app.alternar_criptografia_backups(False); app.alternar_criptografia_backups(True)
+check(not app.db.backup_criptografado and "Desbloqueie" in app.toast._rotulo.cget("text"), "ligar sem senha na sessão: pede para desbloquear")
+app.db.backup_segredo = "senha-1234"; app.alternar_criptografia_backups(True)
+
+# alterar e remover o PIN
+app.abrir_dialogo_pin("alterar"); dlg = app.winfo_children()[-1]
+dlg.ent_atual.text = "errada"; dlg.ent_novo.text = "novo-pin-77"; dlg.ent_confirma.text = "novo-pin-77"; dlg._confirmar()
+check("incorreto" in dlg.lbl_erro.cget("text") and app.seguranca.verificar("senha-1234"), "alterar PIN: senha atual errada é recusada")
+dlg.ent_atual.text = "senha-1234"; dlg._confirmar()
+check(dlg.dead and app.seguranca.verificar("novo-pin-77") and not app.seguranca.verificar("senha-1234") and app.db.backup_segredo == "novo-pin-77", "PIN alterado")
+app.abrir_dialogo_pin("desativar"); dlg = app.winfo_children()[-1]
+dlg.ent_atual.text = "errada"; dlg._confirmar(); check(not dlg.dead and app.seguranca.ativa, "remover PIN: senha errada é recusada")
+dlg.ent_atual.text = "novo-pin-77"; dlg._confirmar()
+check(dlg.dead and not app.seguranca.ativa and not app.db.backup_criptografado and app.db.backup_segredo is None, "PIN removido: sem bloqueio e backups sem criptografia")
+app.bloquear(); check(not app.esta_bloqueado(), "sem PIN não há o que bloquear")
+app.atualizar_config(); check(app.btn_pin_ativar.mapped and not app.grp_pin_opcoes.mapped, "Configurações volta ao estado sem PIN")
+
+# diagnóstico: teste de conexão em segundo plano
+chamadas = []
+_diag.testar_github = lambda repo, timeout=8: (chamadas.append(repo), _diag.Resultado("GitHub (atualizações)", _diag.OK, "Conectado.", 120))[1]
+_diag.testar_supabase = lambda url, chave, timeout=8: _diag.Resultado("Supabase (nuvem)", _diag.PULADO, "Nuvem não configurada (é opcional).")
+app.testar_conexoes()
+check(app._diag_rodando and str(app.btn_testar.cget("state")) == "disabled", "testar conexão: botão desabilitado enquanto roda")
+for _ in range(100):
+    app._sondar_diagnostico()
+    if not app._diag_rodando: break
+    _time.sleep(0.02)
+check(not app._diag_rodando and app.btn_testar.cget("state") == "normal" and len(app.quadro_testes.kids) == 2 and chamadas, "testar conexão: dois resultados mostrados e botão liberado")
+_diag.testar_github = lambda repo, timeout=8: (_ for _ in ()).throw(RuntimeError("falha inesperada"))
+app.testar_conexoes()
+for _ in range(100):
+    app._sondar_diagnostico()
+    if not app._diag_rodando: break
+    _time.sleep(0.02)
+check(not app._diag_rodando and len(app.quadro_testes.kids) == 1, "falha inesperada no teste não trava o botão")
+app._trocar_aba_config("Diagnóstico"); check(app._aba_diagnostico.mapped and not app._aba_seguranca.mapped, "aba Diagnóstico")
+app._trocar_aba_config("Segurança"); check(app._aba_seguranca.mapped, "aba Segurança")
+
+# início minimizado e início com o Windows
+check(app._minimizado is False and app.state() == "normal", "abertura normal: janela normal")
+app_min = gui.App(minimizado=True)
+check(app_min._minimizado and any(ms == 300 and fn == app_min.iconify for ms, fn in app_min.after_calls), "abertura minimizada: agenda iconify")
+alvos = []
+_ini.suportado = lambda: True; _ini.ativo = lambda: False
+_ini.ativar = lambda: alvos.append("ativar"); _ini.desativar = lambda: alvos.append("desativar")
+app.configurar_alertas_pausa(); dlg = app._dialogo_horarios
+check(dlg.chk_inicio is not None and dlg.chk_inicio.get() == 0, "alertas: opção 'abrir ao ligar o computador' aparece quando suportado")
+dlg.chk_inicio.select(); dlg._salvar()
+check(alvos == ["ativar"] and dlg.dead, "marcar a opção liga o início com o Windows")
+_ini.ativar = lambda: (_ for _ in ()).throw(OSError("negado"))
+app.configurar_alertas_pausa(); dlg = app._dialogo_horarios; dlg.chk_inicio.select(); dlg._salvar()
+check("Não foi possível alterar o início" in app.toast._rotulo.cget("text"), "Windows recusa: mostra o motivo")
+_ini.suportado = lambda: False
+app.configurar_alertas_pausa(); dlg = app._dialogo_horarios
+check(dlg.chk_inicio is None, "fora do .exe: opção indisponível, sem checkbox")
 
 # Utilidades
 app._atualizar_relogio()
