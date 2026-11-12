@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from unittest import mock
 
 from anotacoes.nucleo.database import (
+    NOME_ARQUIVO,
     BACKUPS_MANTER,
     caminho_banco,
     validar_campos,
@@ -140,6 +141,34 @@ class TestDatabase(unittest.TestCase):
             caminho = caminho_banco()
             self.assertEqual(os.path.dirname(caminho), os.path.join(raiz, "dados"))
             self.assertTrue(os.path.isdir(os.path.dirname(caminho)))
+
+    def test_exe_usa_pasta_fixa_independente_de_onde_o_exe_esta(self):
+        with tempfile.TemporaryDirectory() as raiz, tempfile.TemporaryDirectory() as local, \
+                mock.patch("anotacoes.nucleo.database.pasta_programa", lambda: raiz), \
+                mock.patch("anotacoes.nucleo.database.empacotado", lambda: True), \
+                mock.patch.dict(os.environ, {"LOCALAPPDATA": local}):
+            esperado = os.path.join(local, "AnotacoesHospitalares")
+            self.assertEqual(os.path.dirname(caminho_banco()), esperado)
+
+    def test_migra_dados_ao_lado_do_exe_sem_apagar_o_original(self):
+        with tempfile.TemporaryDirectory() as raiz, tempfile.TemporaryDirectory() as local, \
+                mock.patch("anotacoes.nucleo.database.pasta_programa", lambda: raiz), \
+                mock.patch("anotacoes.nucleo.database.empacotado", lambda: True), \
+                mock.patch.dict(os.environ, {"LOCALAPPDATA": local}):
+            antiga = os.path.join(raiz, "dados")
+            os.makedirs(antiga)
+            old = Database(os.path.join(antiga, NOME_ARQUIVO))
+            old.inserir("Ana", "1", "guardar")
+            with open(os.path.join(antiga, "preferencias.json"), "w", encoding="utf-8") as f:
+                f.write("{}")
+            caminho = caminho_banco()
+            self.assertTrue(caminho.startswith(os.path.join(local, "AnotacoesHospitalares")))
+            self.assertIn("Ana", Database(caminho).listar()[0])
+            self.assertTrue(os.path.exists(os.path.join(os.path.dirname(caminho), "preferencias.json")))
+            self.assertTrue(os.path.exists(os.path.join(antiga, NOME_ARQUIVO)))   # original intacto
+            # Segunda abertura: não copia de novo por cima dos dados novos.
+            Database(caminho).inserir("Bia", "", "nova")
+            self.assertEqual(len(Database(caminho_banco()).listar()), 2)
 
     # ---------------- edição ----------------
     def test_atualizar_registro(self):

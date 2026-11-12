@@ -4,6 +4,7 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.11.0 — Segurança, início com o Windows e diagnóstico
+* **Dados em pasta fixa:** o programa passa a guardar tudo em `%LOCALAPPDATA%\AnotacoesHospitalares`, e não mais ao lado do `.exe`. Mover o `.exe`, baixá-lo de novo ou atualizá-lo não faz mais os dados "sumirem". Quem já tinha a pasta `dados` ao lado do `.exe` tem o conteúdo **copiado** na primeira abertura (a original fica como backup, com um `LEIA-ME.txt`).
 * **Correção antes da publicação:** o atalho Ctrl + , fazia o programa fechar ao abrir ("bad event type or keysym COMMA"). Corrigido e coberto por teste.
 * **PIN ou senha** (Configurações > Segurança): o programa pode abrir e **bloquear sozinho** após 1 a 30
   minutos sem uso (**Ctrl + B** bloqueia na hora). Erros repetidos impõem espera crescente.

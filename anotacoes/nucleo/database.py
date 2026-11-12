@@ -6,8 +6,8 @@ Camada de persistência do sistema de anotações.
 Usa SQLite (módulo `sqlite3` da biblioteca padrão), portanto não exige
 servidor externo nem instalação adicional.
 
-O banco é criado automaticamente na primeira execução, em uma pasta
-"dados" ao lado do executável (ou na raiz do repositório, em desenvolvimento).
+O banco é criado automaticamente na primeira execução, em %LOCALAPPDATA%\\AnotacoesHospitalares
+(no .exe) ou em "dados" na raiz do repositório (em desenvolvimento).
 
 Recursos:
   - edição de registros e data de retorno (lembrete);
@@ -17,6 +17,7 @@ Recursos:
 """
 
 import os
+import shutil
 import sqlite3
 import unicodedata
 import uuid
@@ -24,7 +25,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
-from anotacoes.caminhos import pasta_programa
+from anotacoes.caminhos import empacotado, pasta_programa
 from anotacoes.nucleo import seguranca
 
 # ----------------------------------------------------------------------
@@ -217,24 +218,66 @@ def _pasta_gravavel(pasta: str) -> bool:
         return False
 
 
+def _migrar_dados(origem: str, destino: str) -> bool:
+    """Copia a pasta de dados antiga (ao lado do .exe) para a nova. Só copia; a antiga
+    fica intacta. O banco vai por último e por arquivo temporário: se algo falhar, o
+    destino não fica com um banco pela metade. True se concluiu."""
+    banco_origem = os.path.join(origem, NOME_ARQUIVO)
+    try:
+        for nome in os.listdir(origem):
+            caminho = os.path.join(origem, nome)
+            if nome == NOME_ARQUIVO or nome.endswith((".tmp", "-journal", "-wal", "-shm")):
+                continue
+            alvo = os.path.join(destino, nome)
+            if os.path.isdir(caminho):
+                shutil.copytree(caminho, alvo, dirs_exist_ok=True)
+            elif not os.path.exists(alvo):
+                shutil.copy2(caminho, alvo)
+        provisorio = os.path.join(destino, NOME_ARQUIVO + ".migrando")
+        shutil.copy2(banco_origem, provisorio)
+        os.replace(provisorio, os.path.join(destino, NOME_ARQUIVO))
+    except OSError:
+        return False
+    try:
+        with open(os.path.join(origem, "LEIA-ME.txt"), "w", encoding="utf-8") as arq:
+            arq.write("Os dados deste programa foram copiados para %LOCALAPPDATA%\\AnotacoesHospitalares\n"
+                      "e passam a ser usados de lá, mesmo se o .exe mudar de pasta.\n"
+                      "Esta pasta é só uma cópia antiga: pode ser guardada como backup.\n")
+    except OSError:
+        pass
+    return True
+
+
 def caminho_banco() -> str:
     """
     Define onde o arquivo .db fica salvo.
 
-    Ordem de preferência (usa a primeira pasta com permissão de gravação):
-      1. pasta "dados" ao lado do .exe (ou na raiz do repositório, em desenvolvimento);
-      2. %LOCALAPPDATA%\\AnotacoesHospitalares;
-      3. pasta do usuário.
+    No .exe: %LOCALAPPDATA%\\AnotacoesHospitalares, uma pasta fixa do usuário. Assim os
+    dados não dependem de onde o .exe está (mover, baixar de novo, atualizar). Quem já tem
+    dados na pasta "dados" ao lado do .exe tem a pasta COPIADA para lá na primeira abertura.
+
+    Em desenvolvimento: "dados" na raiz do repositório.
+    Reservas, se a pasta preferida não aceitar gravação: a outra e, por fim, a pasta do usuário.
     """
-    candidatas = [os.path.join(pasta_programa(), "dados")]
+    ao_lado = os.path.join(pasta_programa(), "dados")
     local = os.environ.get("LOCALAPPDATA")
-    if local:
-        candidatas.append(os.path.join(local, "AnotacoesHospitalares"))
-    candidatas.append(os.path.join(os.path.expanduser("~"), "AnotacoesHospitalares"))
+    fixa = os.path.join(local, "AnotacoesHospitalares") if local else None
+    usuario = os.path.join(os.path.expanduser("~"), "AnotacoesHospitalares")
+
+    if empacotado() and fixa:
+        candidatas = [fixa, ao_lado, usuario]
+    else:
+        candidatas = [ao_lado] + ([fixa] if fixa else []) + [usuario]
 
     for pasta in candidatas:
-        if _pasta_gravavel(pasta):
-            return os.path.join(pasta, NOME_ARQUIVO)
+        if not _pasta_gravavel(pasta):
+            continue
+        if (empacotado() and pasta == fixa
+                and not os.path.exists(os.path.join(pasta, NOME_ARQUIVO))
+                and os.path.exists(os.path.join(ao_lado, NOME_ARQUIVO))
+                and not _migrar_dados(ao_lado, pasta)):
+            continue          # não deu para copiar: segue usando a pasta antiga
+        return os.path.join(pasta, NOME_ARQUIVO)
     raise OSError("Nenhuma pasta com permissão de gravação foi encontrada para o banco de dados.")
 
 

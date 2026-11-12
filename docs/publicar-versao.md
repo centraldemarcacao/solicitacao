@@ -22,7 +22,7 @@ Pela linha de comando: `git tag v2.9.0 && git push origin v2.9.0`.
 
 ## Primeira instalação
 Baixe `AnotacoesHospitalares.exe` da página **Releases** e copie para uma pasta onde o usuário
-possa gravar (Documentos, Área de Trabalho). A pasta `dados` é criada ao lado do `.exe`.
+possa gravar (Documentos, Área de Trabalho). Os dados ficam em `%LOCALAPPDATA%\AnotacoesHospitalares` (pasta fixa do usuário), então o `.exe` pode ficar em qualquer lugar e ser atualizado sem perder nada.
 
 ## Se algo não funcionar
 | Sintoma | O que fazer |

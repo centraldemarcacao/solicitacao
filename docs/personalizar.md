@@ -11,7 +11,7 @@ Cada computador tem a sua própria identidade, sem mexer em arquivos nem no `.ex
 **Restaurar padrão** apaga a identidade personalizada deste computador.
 
 ## Onde fica
-Na pasta `dados`, ao lado do programa: `identidade.json`, `logo_personalizado.png` e
+Na pasta de dados (`%LOCALAPPDATA%\AnotacoesHospitalares`): `identidade.json`, `logo_personalizado.png` e
 `icone_personalizado.ico`. Não copie a pasta `dados` de um computador para outro (ela também
 contém os registros). A atualização automática preserva tudo.
 

@@ -34,8 +34,9 @@ desfazer), `exportacao` (CSV e impressão), `atualizacao` (atualizador), `nuvem`
 sincronização em segundo plano) e `identidade` (janela Personalizar).
 
 ## Dados
-Tudo fica na pasta `dados/` ao lado do `.exe` (ou `%LOCALAPPDATA%\AnotacoesHospitalares` se não
-houver permissão de gravação):
+Tudo fica em `%LOCALAPPDATA%\AnotacoesHospitalares` (no `.exe`; em desenvolvimento, `dados/` na raiz do
+repositório). A pasta é fixa por usuário: mover, baixar de novo ou atualizar o `.exe` não afeta os dados.
+Se existir uma pasta `dados` antiga ao lado do `.exe`, ela é copiada para lá na primeira abertura:
 
 | Arquivo | Conteúdo |
 |---------|----------|
