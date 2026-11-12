@@ -3,6 +3,15 @@
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
+## 2.10.1 — Correção da atualização automática
+* A troca do `.exe` ao atualizar agora roda **sem janelas** (antes, abria uma janela de console
+  repetindo `ping`, por causa do modo "destacado" do processo).
+* O script de troca espera o programa fechar de verdade, **nunca fica em laço infinito** (no máximo
+  cerca de 1 min de espera e 1,5 min de tentativas), confere o resultado pelos arquivos, restaura a
+  versão anterior se algo falhar e registra o ocorrido em `atualizacao.log` (ao lado do `.exe`).
+* Computadores ainda na v2.9.0 continuam com o comportamento antigo na atualização para a 2.10.x:
+  nesses, baixe o `.exe` na página **Releases** e copie por cima do atual (a pasta `dados` não muda).
+
 ## 2.10.0 — Alertas de pausa
 * Janela de aviso, com sinal sonoro, às **14:40** (Pausa NR 17), **17:00** (Pausa para lanche) e
   **18:10** (Pausa NR 17). Aparece mesmo com o programa minimizado e não bloqueia o trabalho.

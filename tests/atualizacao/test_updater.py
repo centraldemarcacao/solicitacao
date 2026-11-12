@@ -102,12 +102,46 @@ class T(unittest.TestCase):
 
     def test_script(self):
         with tempfile.TemporaryDirectory() as d:
-            p = updater.gerar_script_troca(r"C:\Ünï\novo.exe", r"C:\Ünï\app.exe", d)
-            with open(p, encoding="utf-8") as arq:
+            p = updater.gerar_script_troca(r"C:\Ünï\novo.exe", r"C:\Ünï\app.exe", d, pid=4321)
+            with open(p, encoding="utf-8", newline="") as arq:   # newline="": vê os \r\n reais
                 t = arq.read()
             self.assertIn("chcp 65001", t)
             self.assertIn(r'move /y "C:\Ünï\novo.exe" "C:\Ünï\app.exe"', t)
             self.assertIn('start "" "C:\\Ünï\\app.exe"', t)
+            self.assertIn('tasklist /FI "PID eq 4321" /NH 2>nul | find " 4321 "', t)          # espera o programa fechar
+            self.assertIn("atualizacao.log", t)                      # diagnóstico
+            self.assertTrue(t.endswith("\r\n") and "\n" not in t.replace("\r\n", ""))
+
+    def test_script_nunca_fica_em_laco_infinito(self):
+        with tempfile.TemporaryDirectory() as d:
+            t = open(updater.gerar_script_troca("n.exe", "a.exe", d, pid=7), encoding="utf-8").read()
+        # todo "goto" que volta a um rótulo de repetição passa antes por um limite
+        self.assertIn("if %espera% GEQ 60 goto fechou", t)
+        self.assertIn("if %t% GEQ 30 goto fim", t)
+        self.assertLess(t.index("if %t% GEQ 30"), t.index("goto trocar"))
+        self.assertLess(t.index("if %espera% GEQ 60"), t.index("goto esperar"))
+
+    def test_script_sem_pid_e_com_porcentagem(self):
+        with tempfile.TemporaryDirectory() as d:
+            t = open(updater.gerar_script_troca(r"C:\a%b\n.exe", r"C:\a%b\x.exe", d),
+                     encoding="utf-8").read()
+        self.assertNotIn("tasklist", t)
+        self.assertIn(r'"C:\a%%b\x.exe"', t)                      # % dobrado no .bat
+
+    def test_troca_roda_sem_janela(self):
+        chamadas = {}
+        def fake_popen(args, **kw):
+            chamadas.update(kw, args=args)
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(updater.sys, "executable", os.path.join(d, "app.exe")), \
+                mock.patch.object(updater.subprocess, "Popen", fake_popen):
+            updater.executar_troca(os.path.join(d, "novo.exe"))
+            self.assertTrue(os.path.isfile(os.path.join(d, "atualizar.bat")))
+        flags = chamadas["creationflags"]
+        self.assertTrue(flags & 0x08000000)                          # CREATE_NO_WINDOW
+        self.assertFalse(flags & 0x00000008)                         # nunca DETACHED_PROCESS
+        self.assertEqual(chamadas["args"][:2], ["cmd", "/c"])
+
 
 
 if __name__ == "__main__":
