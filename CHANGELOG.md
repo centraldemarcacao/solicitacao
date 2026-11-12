@@ -1,9 +1,9 @@
 # Histórico de versões
 
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
-(tag `v2.10.0`); o programa instalado se atualiza sozinho a partir delas.
+(tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
-## Próxima versão — Alertas de pausa
+## 2.10.0 — Alertas de pausa
 * Janela de aviso, com sinal sonoro, às **14:40** (Pausa NR 17), **17:00** (Pausa para lanche) e
   **18:10** (Pausa NR 17). Aparece mesmo com o programa minimizado e não bloqueia o trabalho.
 * Botão de **sino** no relógio do menu lateral abre a janela **Alertas de pausa**: liga/desliga e

@@ -11,7 +11,7 @@ O programa instalado verifica o GitHub e se atualiza sozinho. Para lançar uma v
 1. Envie o código para a branch `main` (commit e push). O GitHub Actions roda os testes e gera o
    `.exe` (aba **Actions**); isso ainda **não** publica uma versão.
 2. Em **Releases > Draft a new release**, clique em **Choose a tag**, digite `v2.9.0`
-   (sempre com `v`) e escolha *Create new tag on publish*.
+   (sempre com `v`; a tag decide a versão que o programa passa a ter) e escolha *Create new tag on publish*.
 3. Título: `v2.9.0`. Clique em **Publish release**.
 4. O Actions gera o `.exe`, ajusta o número da versão no programa e anexa
    `AnotacoesHospitalares.exe` e `SHA256.txt` à Release (leva alguns minutos; espere a marca verde).
@@ -27,6 +27,7 @@ possa gravar (Documentos, Área de Trabalho). A pasta `dados` é criada ao lado 
 ## Se algo não funcionar
 | Sintoma | O que fazer |
 |---------|-------------|
+| Release só com "Source code" (sem `.exe` nem `SHA256.txt`) e nenhuma execução nova em **Actions** | A tag foi criada sem o `v` (ex.: `2.10.0`) em um commit cujo workflow não a reconhecia. Apague a Release e a tag e publique de novo como `v2.10.0`, depois que o commit mais recente da `main` tiver passado no Actions. |
 | Release sem o `.exe` | Veja a aba **Actions**: o passo que falhou aparece em vermelho. |
 | `.exe` da Release com versão antiga | A tag foi criada antes de enviar o código novo. Envie tudo, apague a tag e a Release e crie de novo. |
 | "Atualizações" diz que está em dia | Confira se a tag é maior que a versão instalada e se a Release foi *publicada* (não rascunho). |
