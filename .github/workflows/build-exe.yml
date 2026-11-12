@@ -5,7 +5,7 @@ name: Gerar executável (.exe)
 on:
   push:
     branches: [main, master]
-    tags: ["v*"]      # ex.: v2.9.0 -> publica uma versão para a atualização automática
+    tags: ["v*", "[0-9]*"]      # ex.: v2.9.0 -> publica uma versão para a atualização automática
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
 
       # Ao publicar a tag v2.9.0, a versão exibida no programa vira 2.9.0 automaticamente.
       - name: Ajustar a versão do programa pela tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           $versao = "${{ github.ref_name }}".TrimStart("v")
           (Get-Content anotacoes/theme.py -Encoding UTF8) -replace '^VERSAO = ".*"', "VERSAO = `"$versao`"" | Set-Content anotacoes/theme.py -Encoding UTF8
@@ -91,7 +91,7 @@ jobs:
       # Só em tags "v*": publica o .exe e a assinatura numa Release.
       # É daí que o programa instalado busca as atualizações.
       - name: Publicar a versão (Release)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
