@@ -1179,6 +1179,75 @@ _ini.suportado = lambda: False
 app.configurar_alertas_pausa(); dlg = app._dialogo_horarios
 check(dlg.chk_inicio is None, "fora do .exe: opção indisponível, sem checkbox")
 
+# --- Modelos de descrição -------------------------------------------------
+from anotacoes.interface.mixins import modelos as modelos_gui
+from anotacoes.nucleo import modelos as _mod_regras
+app.txt_desc.delete("1.0", "end")
+app._usar_modelo("Solicita água.")
+check(app.txt_desc.text.strip() == "Solicita água.", "modelo: clique insere o texto")
+app._usar_modelo("Solicita cobertor.")
+check(app.txt_desc.text.strip() == "Solicita água.\nSolicita cobertor.", "modelo: segundo clique acrescenta em nova linha")
+check(app.lbl_contador.cget("text").startswith(str(len("Solicita água.\nSolicita cobertor."))), "modelo: contador atualizado")
+app.txt_desc.delete("1.0", "end")
+app.txt_desc.text = "x" * (gui.MAX_DESCRICAO - 2)
+app._usar_modelo("Solicita água.")
+check("passaria" in app.toast._rotulo.cget("text"), "modelo: avisa quando passa do limite")
+check(app.txt_desc.text == "x" * (gui.MAX_DESCRICAO - 2), "modelo: texto intacto quando não cabe")
+app.txt_desc.delete("1.0", "end")
+salvos = []
+dlg = modelos_gui.DialogoModelos(app, _mod_regras.padrao(), lambda lista: salvos.append(lista))
+check(len(dlg._linhas) == len(_mod_regras.padrao()), "modelo: janela lista os modelos atuais")
+dlg._remover(dlg._linhas[0]); dlg._adicionar()
+novo = dlg._linhas[-1]
+novo[1].insert(0, "Fralda"); novo[2].insert(0, "Solicita troca de fralda.")
+dlg._salvar()
+check(salvos and salvos[0][-1] == {"titulo": "Fralda", "texto": "Solicita troca de fralda."}
+      and salvos[0][0]["titulo"] == "Travesseiro", "modelo: remover e adicionar salvam")
+dlg2 = modelos_gui.DialogoModelos(app, _mod_regras.padrao(), lambda l: salvos.append("x"))
+dlg2._adicionar(); dlg2._linhas[-1][1].insert(0, "Só título")
+dlg2._salvar()
+check("Preencha" in dlg2.lbl_erro.cget("text") and "x" not in salvos, "modelo: linha incompleta é recusada")
+app._salvar_modelos([{"titulo": "Teste", "texto": "Texto de teste."}])
+check(app.prefs.modelos_descricao == [{"titulo": "Teste", "texto": "Texto de teste."}], "modelo: preferências atualizadas")
+check(os.path.exists(os.path.join(tmp, "preferencias.json")) and "Teste" in open(os.path.join(tmp, "preferencias.json"), encoding="utf-8").read(), "modelo: gravado em preferencias.json")
+app._salvar_modelos(_mod_regras.padrao())
+
+# --- Restaurar de um arquivo + assistente de primeiro uso -------------------
+app.db.inserir("Cópia", "", "registro para o backup externo")
+externo = os.path.join(tmp, "externo.db")
+app.db.fazer_backup(os.path.basename(externo))
+import shutil as _sh
+_sh.copy2(os.path.join(app.db.pasta_backups(), os.path.basename(externo)), externo)
+app.db.inserir("Depois", "", "registro posterior ao backup")
+n_antes = len(app.db.listar())
+RESP["v"] = True
+sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = ""
+app.restaurar_de_arquivo()
+check(len(app.db.listar()) == n_antes, "restaurar de arquivo: cancelar não altera nada")
+sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = externo
+app.restaurar_de_arquivo()
+check(len(app.db.listar()) == n_antes - 1 and "restaurado" in app.toast._rotulo.cget("text"),
+      "restaurar de arquivo: dados voltam ao estado do backup")
+sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = ""
+
+from anotacoes.interface.mixins import primeiro_uso as pu_gui
+escolhas = []
+dlg = pu_gui.DialogoBoasVindas(app, tmp, escolhas.append)
+dlg._escolher("nuvem"); dlg._escolher("zero")
+check(escolhas == ["nuvem"], "assistente: a escolha vale uma vez só")
+app.prefs.primeiro_uso_concluido = False
+app._ao_escolher_inicio("nuvem")
+check(app.paginas["nuvem"].mapped and app.prefs.primeiro_uso_concluido, "assistente: 'já uso em outro computador' abre a Nuvem e conclui")
+app._ao_escolher_inicio("zero")
+check(app.paginas["novo"].mapped, "assistente: 'começar do zero' abre o Novo registro")
+sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = externo
+app._ao_escolher_inicio("backup")
+check(app.paginas["backup"].mapped, "assistente: 'restaurar backup' abre a página Backup")
+sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = ""
+app.prefs.primeiro_uso_concluido = False
+app._iniciar_primeiro_uso()
+check(app.prefs.primeiro_uso_concluido, "assistente: instalação já em uso é marcada como concluída sem mostrar")
+
 # Utilidades
 app._atualizar_relogio()
 check(app.lbl_hora.cget("text") != "--:--", "relógio atualiza")

@@ -18,6 +18,8 @@ entregue como um único `.exe` que se atualiza sozinho.
 * **Segurança (opcional)**: PIN/senha, bloqueio por inatividade (Ctrl + B bloqueia na hora) e backups criptografados (AES-256). Veja `docs/seguranca.md`.
 * **Iniciar com o Windows**, minimizado, para os alertas de pausa não dependerem de abrir o programa.
 * **Configurações** (engrenagem do menu, Ctrl + ,): segurança e **diagnóstico** (versão, pastas e teste de conexão com GitHub e Supabase).
+* **Modelos de descrição**: frases prontas para pedidos frequentes, com um clique.
+* **Instalador** (na página Releases) com atalhos na Área de Trabalho e no Menu Iniciar, e **assistente de boas-vindas** na primeira abertura.
 * **Personalizar**: nome, subtítulo e logo por computador.
 * **Atualização automática** pelo GitHub Releases, com conferência SHA-256.
 
@@ -35,6 +37,8 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   ├── util.py            #     validações e formatação
 │   │   ├── preferencias.py    #     preferências do usuário
 │   │   ├── pausas.py          #     horários dos alertas de pausa
+│   │   ├── modelos.py         #     modelos de descrição
+│   │   ├── primeiro_uso.py    #     quando mostrar o assistente de boas-vindas
 │   │   ├── seguranca.py       #     PIN, bloqueio e criptografia dos backups
 │   │   ├── inicializacao.py   #     iniciar com o Windows
 │   │   ├── instancia.py       #     uma janela só (mutex)
@@ -55,6 +59,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 ├── tests/                     # testes (espelha o pacote)
 ├── assets/                    # ícone e logo
 ├── supabase/setup.sql         # tabela e regras de segurança da nuvem
+├── installer/anotacoes.iss    # script do instalador (Inno Setup, usado pelo Actions)
 ├── scripts/build.bat          # gera o .exe no seu computador
 ├── docs/                      # guias (segurança, arquitetura, publicar versão, nuvem, personalizar)
 ├── .github/workflows/         # CI: testa, gera o .exe e publica Releases

@@ -13,6 +13,7 @@ self._card, self._cabecalho, self._rotulo, self._entrada, ...).
 """
 
 import os
+from tkinter import filedialog
 
 import customtkinter as ctk
 
@@ -342,6 +343,12 @@ class PaginasExtrasMixin:
             command=self.restaurar_backup_selecionado,
         ).pack(side="left", padx=10)
         ctk.CTkButton(
+            barra, text="Restaurar de um arquivo…", height=40, corner_radius=10,
+            font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEXTO,
+            border_width=2, border_color=T.BORDA_FORTE, hover_color=T.FUNDO,
+            command=self.restaurar_de_arquivo,
+        ).pack(side="left")
+        ctk.CTkButton(
             barra, text="Abrir pasta dos backups", height=40, corner_radius=10,
             font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEXTO,
             border_width=2, border_color=T.BORDA_FORTE, hover_color=T.FUNDO,
@@ -413,8 +420,24 @@ class PaginasExtrasMixin:
         item = self._backups_por_iid.get(marcados[0])
         if not item:
             return
+        self._restaurar_caminho(item["caminho"], item["nome"])
+
+    def restaurar_de_arquivo(self) -> None:
+        """Restaura um backup de qualquer pasta (pendrive, OneDrive, outro computador)."""
+        caminho = filedialog.askopenfilename(
+            parent=self, title="Escolher o arquivo de backup",
+            initialdir=self.db.pasta_backups(),
+            filetypes=[("Backups", "*.db *.dbx"), ("Todos os arquivos", "*.*")])
+        if not caminho:
+            return
+        if not os.path.isfile(caminho):
+            self.toast.mostrar("Arquivo não encontrado.", "erro")
+            return
+        self._restaurar_caminho(caminho, os.path.basename(caminho))
+
+    def _restaurar_caminho(self, caminho: str, nome: str) -> None:
         confirmou = DialogoConfirmacao.perguntar(
-            self, "Restaurar este backup?", resumir(item["nome"], 40),
+            self, "Restaurar este backup?", resumir(nome, 40),
             "Os registros atuais serão substituídos pelo conteúdo deste backup. "
             "Antes disso, uma cópia de segurança do estado atual será criada.",
             "Restaurar", nome_icone="restore", cor=T.TEAL,
@@ -424,14 +447,14 @@ class PaginasExtrasMixin:
             return
         try:
             try:
-                copia_anterior = self.db.restaurar_backup(item["caminho"])
+                copia_anterior = self.db.restaurar_backup(caminho)
             except seguranca.SenhaIncorreta:
                 # A senha atual não abre este backup (criado com outra senha): pergunta.
                 from anotacoes.interface.mixins.bloqueio import DialogoSenhaBackup
-                senha = DialogoSenhaBackup.perguntar(self, item["nome"])
+                senha = DialogoSenhaBackup.perguntar(self, nome)
                 if not senha:
                     return
-                copia_anterior = self.db.restaurar_backup(item["caminho"], segredo=senha)
+                copia_anterior = self.db.restaurar_backup(caminho, segredo=senha)
         except ValueError as exc:     # inclui senha incorreta e arquivo inválido
             self.toast.mostrar(str(exc), "erro", 6000)
             return

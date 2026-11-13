@@ -3,7 +3,20 @@
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
-## 2.11.0 — Segurança, início com o Windows e diagnóstico
+## 2.12.0 — Modelos de descrição, instalador e boas-vindas
+* **Modelos de descrição:** botões com frases prontas ("Solicita água.", "Solicita travesseiro."...) no
+  formulário Novo registro. Um clique insere o texto (em nova linha, se já houver algo). **Editar modelos**
+  permite trocar, adicionar (até 10) e remover; ficam em `preferencias.json`.
+* **Instalador:** cada Release traz também `Anotacoes-Instalador.exe`, que instala só para o usuário (sem
+  administrador), cria atalhos na **Área de Trabalho** e no **Menu Iniciar** e um desinstalador. Os dados
+  ficam fora da pasta do programa e **não são apagados** ao atualizar, reinstalar ou desinstalar. O `.exe`
+  solto continua disponível. O instalador não tem assinatura digital: o Windows pode pedir confirmação.
+* **Assistente de boas-vindas** (só em instalação nova, uma vez): começar do zero, entrar pela nuvem
+  ("já uso em outro computador") ou **restaurar um backup**.
+* **Restaurar de um arquivo** (página Backup): restaura um backup `.db`/`.dbx` de qualquer pasta, como
+  pendrive ou OneDrive, e não só os da pasta de backups.
+
+## 2.11.1 — Segurança, início com o Windows e diagnóstico
 * **Projeto Supabase fixo:** o endereço e a chave pública do projeto passam a ficar no arquivo `anotacoes/nuvem/projeto.py` (preenchidos uma vez). Com os dois preenchidos, a página Nuvem pede **só e-mail e senha**, e o mesmo projeto vale em todos os computadores. Para dar acesso a outra pessoa, basta criar um novo usuário no Supabase.
 * **Novo nome do arquivo:** o executável passa a se chamar `Anotacoes.exe` (sem acento, porque o GitHub troca letras acentuadas no nome dos arquivos publicados e isso quebraria a atualização). A Release também traz uma cópia com o nome antigo, `AnotacoesHospitalares.exe`, para que os programas já instalados continuem se atualizando. Quem já usa o programa mantém o arquivo como está; o nome só muda em novas instalações. O nome mostrado na janela continua o que você definir em Personalizar.
 * **Dados em pasta fixa:** o programa passa a guardar tudo em `%LOCALAPPDATA%\AnotacoesHospitalares`, e não mais ao lado do `.exe`. Mover o `.exe`, baixá-lo de novo ou atualizá-lo não faz mais os dados "sumirem". Quem já tinha a pasta `dados` ao lado do `.exe` tem o conteúdo **copiado** na primeira abertura (a original fica como backup, com um `LEIA-ME.txt`).

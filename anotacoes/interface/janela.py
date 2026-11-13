@@ -32,9 +32,11 @@ from anotacoes.interface.mixins.bloqueio import BloqueioMixin
 from anotacoes.interface.mixins.configuracoes import ConfiguracoesMixin
 from anotacoes.interface.mixins.exportacao import ExportacaoMixin
 from anotacoes.interface.mixins.identidade import IdentidadeMixin
+from anotacoes.interface.mixins.modelos import ModelosMixin
 from anotacoes.interface.mixins.nuvem import NuvemMixin
 from anotacoes.interface.mixins.paginas import PaginasExtrasMixin
 from anotacoes.interface.mixins.pausas import PausasMixin
+from anotacoes.interface.mixins.primeiro_uso import PrimeiroUsoMixin
 from anotacoes.interface.mixins.resumo import ResumoMixin
 from anotacoes.interface.widgets import (
     CaixaBusca,
@@ -109,7 +111,7 @@ COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "r
 
 class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
           NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, PausasMixin, BloqueioMixin,
-          ConfiguracoesMixin, ctk.CTk):
+          ConfiguracoesMixin, ModelosMixin, PrimeiroUsoMixin, ctk.CTk):
     def __init__(self, minimizado: bool = False) -> None:
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
@@ -195,6 +197,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         inicializacao.corrigir_caminho()
         if minimizado:
             self.after(300, self.iconify)
+        self._iniciar_primeiro_uso(minimizado)
 
     # ==================================================================
     # Escala e tamanho da janela
@@ -694,6 +697,9 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             text_color=T.TEXTO_SUAVE,
         )
         self.lbl_contador.pack(side="right")
+        self._frm_modelos = ctk.CTkFrame(f, fg_color="transparent")
+        self._frm_modelos.pack(fill="x", pady=(4, 0))
+        self._montar_modelos()
 
         # Botões e erro da descrição ficam presos à base do cartão: em janelas
         # baixas, quem encolhe é a caixa de texto (e nada some).

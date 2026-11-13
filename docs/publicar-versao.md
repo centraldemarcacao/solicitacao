@@ -21,6 +21,8 @@ O programa instalado verifica o GitHub e se atualiza sozinho. Para lançar uma v
 Pela linha de comando: `git tag v2.9.0 && git push origin v2.9.0`.
 
 ## Primeira instalação
+A forma mais simples é o **`Anotacoes-Instalador.exe`** da página **Releases**: instala sem administrador, cria os atalhos e o desinstalador. (Se o passo "Gerar o instalador" do Actions falhar, a Release sai só com o `.exe` solto; abra o log desse passo.) Alternativa sem instalar:
+
 Baixe `Anotacoes.exe` da página **Releases** e copie para uma pasta onde o usuário
 possa gravar (Documentos, Área de Trabalho). Os dados ficam em `%LOCALAPPDATA%\AnotacoesHospitalares` (pasta fixa do usuário), então o `.exe` pode ficar em qualquer lugar e ser atualizado sem perder nada.
 
