@@ -47,3 +47,18 @@ Para conferir, abra *Table Editor > `solicitacoes_registros`* no Supabase.
 * Restaurar um backup (página Backup) passa a valer também na nuvem; registros que só existiam
   lá não voltam sozinhos.
 * **Desconectar** não apaga nada. Para apagar a cópia, use o painel do Supabase.
+
+## Projeto fixo e vários usuários
+Para não pedir endereço e chave em cada computador, preencha uma vez `anotacoes/nuvem/projeto.py`
+(`URL_PROJETO` e `CHAVE_PUBLICA`, a chave **anon / publishable**, nunca a secret). Depois disso, a página
+Nuvem mostra só **e-mail e senha**.
+
+* Para cada pessoa, crie um usuário em **Authentication > Users > Add user** (pode ser um e-mail sem
+  caixa de entrada, como `maria@solicitacao.local`; marque **Auto Confirm User**). Cada usuário vê só os
+  próprios registros.
+* **Desative o cadastro aberto:** em **Authentication > Sign In / Providers** (ou "User Signups"),
+  desligue **Allow new users to sign up**. Assim, mesmo com a chave pública visível no programa,
+  só entra quem você criou.
+* A chave pública foi feita para ficar no programa; a proteção vem do login e das regras do banco
+  (`supabase/setup.sql`). Se o repositório for público, isso continua seguro, desde que o SQL tenha
+  sido executado e o cadastro aberto esteja desligado.

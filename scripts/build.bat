@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM  scripts\build.bat - Gera o executavel AnotacoesHospitalares.exe
+REM  scripts\build.bat - Gera o executavel Anotacoes.exe
 REM  Pode ser executado com duplo clique (Windows).
 REM
 REM  Requer Python 3.10 ou superior instalado NESTE computador
@@ -29,7 +29,7 @@ if errorlevel 1 goto erro
 
 echo.
 echo [2/3] Gerando o executavel com PyInstaller...
-set OPCOES=--noconfirm --clean --onefile --windowed --name "AnotacoesHospitalares" --collect-all customtkinter --hidden-import PIL._tkinter_finder --hidden-import cryptography.hazmat.primitives.ciphers.aead
+set OPCOES=--noconfirm --clean --onefile --windowed --name "Anotacoes" --collect-all customtkinter --hidden-import PIL._tkinter_finder --hidden-import cryptography.hazmat.primitives.ciphers.aead
 if exist assets\icone.ico set OPCOES=%OPCOES% --icon "assets\icone.ico" --add-data "assets\icone.ico;."
 if exist assets\logo.png set OPCOES=%OPCOES% --add-data "assets\logo.png;."
 
@@ -38,7 +38,7 @@ if errorlevel 1 goto erro
 
 echo.
 echo [3/3] Concluido!
-echo O executavel esta em: dist\AnotacoesHospitalares.exe
+echo O executavel esta em: dist\Anotacoes.exe
 echo O banco de dados sera criado na pasta "dados", ao lado do executavel.
 pause
 exit /b 0

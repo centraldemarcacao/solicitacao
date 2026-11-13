@@ -21,6 +21,7 @@ import customtkinter as ctk
 
 from anotacoes import theme as T
 from anotacoes.interface.icons import icone
+from anotacoes.nuvem import projeto
 from anotacoes.nuvem.cliente import (ClienteSupabase, NuvemErro, normalizar_url, validar_chave,
                    validar_email)
 from anotacoes.nuvem.sql import SQL_CONFIGURACAO
@@ -108,17 +109,25 @@ class NuvemMixin:
                          padx=(0, 10 if coluna == 0 and ocupa == 1 else 0))
             return entrada
 
-        self.ent_nuvem_url = campo(0, 0, "Endereço do projeto (Project URL)",
-                                   "https://xxxxxxxx.supabase.co", ocupa=2)
-        self.ent_nuvem_chave = campo(2, 0, "Chave pública (anon / publishable)",
-                                     "Cole aqui a chave pública — nunca a secreta", ocupa=2)
-        self.ent_nuvem_email = campo(4, 0, "E-mail do usuário", "seu@email.com")
-        self.ent_nuvem_senha = campo(4, 1, "Senha", "A senha não fica salva", esconder=True)
-        self.ent_nuvem_senha.bind("<Return>", lambda _e: self.conectar_nuvem())
+        # Projeto único (nuvem/projeto.py): só e-mail e senha na tela.
+        self._projeto_fixo = projeto.projeto_fixo()
         c = self._nuvem_cfg
-        for entrada, valor in ((self.ent_nuvem_url, c.get("url")),
-                               (self.ent_nuvem_chave, c.get("chave")),
-                               (self.ent_nuvem_email, c.get("email"))):
+        linha_login = 0
+        self.ent_nuvem_url = self.ent_nuvem_chave = None
+        if self._projeto_fixo is None:
+            self.ent_nuvem_url = campo(0, 0, "Endereço do projeto (Project URL)",
+                                       "https://xxxxxxxx.supabase.co", ocupa=2)
+            self.ent_nuvem_chave = campo(2, 0, "Chave pública (anon / publishable)",
+                                         "Cole aqui a chave pública — nunca a secreta", ocupa=2)
+            linha_login = 4
+        self.ent_nuvem_email = campo(linha_login, 0, "E-mail do usuário", "seu@email.com")
+        self.ent_nuvem_senha = campo(linha_login, 1, "Senha", "A senha não fica salva", esconder=True)
+        self.ent_nuvem_senha.bind("<Return>", lambda _e: self.conectar_nuvem())
+        valores = [(self.ent_nuvem_email, c.get("email"))]
+        if self._projeto_fixo is None:
+            valores += [(self.ent_nuvem_url, c.get("url") or projeto.URL_PROJETO),
+                        (self.ent_nuvem_chave, c.get("chave"))]
+        for entrada, valor in valores:
             if valor:
                 entrada.insert(0, valor)
 
@@ -129,16 +138,19 @@ class NuvemMixin:
             font=fonte(13, "bold"), fg_color=T.TEAL, hover_color=T.TEAL_ESCURO,
             text_color=T.SOBRE_COR, command=self.conectar_nuvem)
         self.btn_nuvem_conectar.pack(side="left")
-        ctk.CTkButton(
-            botoes, text="Copiar SQL de configuração", width=230, height=40,
-            corner_radius=10, font=fonte(13, "bold"), fg_color="transparent",
-            text_color=T.TEAL, border_width=2, border_color=T.TEAL,
-            hover_color=T.TEAL_CLARO, command=self.copiar_sql_nuvem,
-        ).pack(side="left", padx=10)
+        if self._projeto_fixo is None:
+            ctk.CTkButton(
+                botoes, text="Copiar SQL de configuração", width=230, height=40,
+                corner_radius=10, font=fonte(13, "bold"), fg_color="transparent",
+                text_color=T.TEAL, border_width=2, border_color=T.TEAL,
+                hover_color=T.TEAL_CLARO, command=self.copiar_sql_nuvem,
+            ).pack(side="left", padx=10)
         ctk.CTkLabel(
             self._grp_nuvem_entrar, font=fonte(12), text_color=T.TEXTO_SUAVE,
             anchor="w", wraplength=780,
-            text=("Primeira vez? 1) No Supabase, abra “SQL Editor”, cole o SQL copiado aqui e "
+            text=("Use o e-mail e a senha que você recebeu. Os mesmos dados funcionam em "
+                  "qualquer computador." if self._projeto_fixo else
+                  "Primeira vez? 1) No Supabase, abra “SQL Editor”, cole o SQL copiado aqui e "
                   "clique em Run.  2) Em “Authentication > Users”, crie um usuário com e-mail "
                   "e senha (marque Auto Confirm User).  3) Em “Project Settings > API”, copie "
                   "a Project URL e a chave anon / publishable."),
@@ -223,8 +235,11 @@ class NuvemMixin:
         if self._sync_rodando:
             return
         try:
-            url = normalizar_url(self.ent_nuvem_url.get())
-            chave = validar_chave(self.ent_nuvem_chave.get())
+            if self._projeto_fixo:
+                url, chave = self._projeto_fixo
+            else:
+                url = normalizar_url(self.ent_nuvem_url.get())
+                chave = validar_chave(self.ent_nuvem_chave.get())
             email = validar_email(self.ent_nuvem_email.get())
         except ValueError as exc:
             self.toast.mostrar(str(exc), "erro", 6000)

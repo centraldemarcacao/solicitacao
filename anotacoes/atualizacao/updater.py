@@ -20,7 +20,8 @@ from urllib.parse import urlparse
 
 from anotacoes.nucleo.certificados import MENSAGEM_CERTIFICADO, contexto_ssl, erro_de_certificado
 
-NOME_EXE = "AnotacoesHospitalares.exe"
+NOME_EXE = "Anotacoes.exe"
+NOME_EXE_ANTIGO = "AnotacoesHospitalares.exe"   # nome até a v2.11.x; segue publicado, igual
 NOME_HASH = "SHA256.txt"
 HOSTS_PERMITIDOS = ("github.com", "githubusercontent.com")
 LIMITE_TAMANHO = 300 * 1024 * 1024   # recusa arquivos absurdamente grandes
@@ -90,7 +91,8 @@ def buscar_ultima(repositorio: str, timeout: float = 8) -> "InfoAtualizacao | No
 
 def interpretar_release(dados: dict) -> "InfoAtualizacao | None":
     assets = {a.get("name"): a for a in dados.get("assets", []) if isinstance(a, dict)}
-    exe, hash_ = assets.get(NOME_EXE), assets.get(NOME_HASH)
+    exe = assets.get(NOME_EXE) or assets.get(NOME_EXE_ANTIGO)
+    hash_ = assets.get(NOME_HASH)
     tag = dados.get("tag_name") or ""
     if not (exe and hash_ and versao_para_tupla(tag)):
         return None  # sem .exe ou sem assinatura: não é seguro atualizar

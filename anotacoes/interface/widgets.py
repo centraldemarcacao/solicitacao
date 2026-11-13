@@ -197,7 +197,7 @@ class Notificacao(ctk.CTkFrame):
         super().__init__(pai, fg_color=T.VERDE, corner_radius=12)
         self._rotulo = ctk.CTkLabel(
             self, text="", compound="left", text_color=T.SOBRE_COR,
-            font=fonte(14, "bold"),
+            font=fonte(14, "bold"), wraplength=640,
         )
         self._rotulo.pack(padx=22, pady=13)
         self._tarefa = None

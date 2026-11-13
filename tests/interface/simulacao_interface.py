@@ -718,6 +718,7 @@ check(True, "restaurar backup executa sem erro")
 
 # --- Nuvem (Supabase) ---
 from anotacoes.interface.mixins import nuvem as nuvem_gui
+from anotacoes.nuvem import projeto as _projeto_mod
 from anotacoes.nuvem import cliente as _nuvem
 import time as _time
 from anotacoes.nuvem.sincronizacao import Resultado
@@ -742,6 +743,8 @@ def esperar_fila():
     return False
 
 # validações do formulário
+check(app.ent_nuvem_url.get() == _projeto_mod.URL_PROJETO, "nuvem: endereço do projeto já vem preenchido")
+app.ent_nuvem_url.delete(0, "end")
 app.conectar_nuvem()
 check("endereço" in app.toast._rotulo.cget("text").lower(), "nuvem: exige o endereço do projeto")
 app.ent_nuvem_url.insert(0, "https://abc.supabase.co")
@@ -1181,4 +1184,28 @@ app._atualizar_relogio()
 check(app.lbl_hora.cget("text") != "--:--", "relógio atualiza")
 app._erro_inesperado(ValueError, ValueError("teste"), None)
 check(os.path.exists(os.path.join(tmp, "erros.log")), "erro inesperado gravado em erros.log")
+# Projeto fixo (nuvem/projeto.py): a página mostra só e-mail e senha
+_orig_fixo = _projeto_mod.projeto_fixo
+_projeto_mod.projeto_fixo = lambda *a, **k: ("https://abc.supabase.co", "sb_publishable_" + "A" * 24)
+app2 = gui.App()
+check(app2.ent_nuvem_url is None and app2.ent_nuvem_chave is None, "projeto fixo: sem campos de endereço e chave")
+check(app2.ent_nuvem_email is not None and app2.ent_nuvem_senha is not None, "projeto fixo: e-mail e senha visíveis")
+app2.ent_nuvem_email.delete(0, "end"); app2.ent_nuvem_email.insert(0, "maria@solicitacao.local")
+app2.ent_nuvem_senha.insert(0, "segredo123")
+usados = {}
+class _Falso:
+    refresh_token = "r"
+    def __init__(self, url, chave, *a, **k): usados["url"], usados["chave"] = url, chave
+    def entrar(self, e, s): usados["email"] = e
+_orig_cli, nuvem_gui.ClienteSupabase = nuvem_gui.ClienteSupabase, _Falso
+_orig_tc, nuvem_gui.testar_conexao = nuvem_gui.testar_conexao, lambda c: None
+app2.conectar_nuvem()
+for _ in range(200):
+    if not app2._sync_fila.empty(): break
+    _time.sleep(0.01)
+check(usados.get("url") == "https://abc.supabase.co" and usados.get("email") == "maria@solicitacao.local",
+      "projeto fixo: conecta com o endereço do arquivo e o e-mail digitado")
+nuvem_gui.ClienteSupabase, nuvem_gui.testar_conexao = _orig_cli, _orig_tc
+_projeto_mod.projeto_fixo = _orig_fixo
+
 print(f"\n{ok} verificações passaram.")

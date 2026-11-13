@@ -14,14 +14,14 @@ O programa instalado verifica o GitHub e se atualiza sozinho. Para lançar uma v
    (sempre com `v`; a tag decide a versão que o programa passa a ter) e escolha *Create new tag on publish*.
 3. Título: `v2.9.0`. Clique em **Publish release**.
 4. O Actions gera o `.exe`, ajusta o número da versão no programa e anexa
-   `AnotacoesHospitalares.exe` e `SHA256.txt` à Release (leva alguns minutos; espere a marca verde).
+   `Anotacoes.exe` e `SHA256.txt` à Release (leva alguns minutos; espere a marca verde).
 5. Nos computadores que usam o programa: botão **Atualizações** no rodapé do menu (ou espere a
    verificação automática ao abrir).
 
 Pela linha de comando: `git tag v2.9.0 && git push origin v2.9.0`.
 
 ## Primeira instalação
-Baixe `AnotacoesHospitalares.exe` da página **Releases** e copie para uma pasta onde o usuário
+Baixe `Anotacoes.exe` da página **Releases** e copie para uma pasta onde o usuário
 possa gravar (Documentos, Área de Trabalho). Os dados ficam em `%LOCALAPPDATA%\AnotacoesHospitalares` (pasta fixa do usuário), então o `.exe` pode ficar em qualquer lugar e ser atualizado sem perder nada.
 
 ## Se algo não funcionar
@@ -32,7 +32,7 @@ possa gravar (Documentos, Área de Trabalho). Os dados ficam em `%LOCALAPPDATA%\
 | Release sem o `.exe` | Veja a aba **Actions**: o passo que falhou aparece em vermelho. |
 | `.exe` da Release com versão antiga | A tag foi criada antes de enviar o código novo. Envie tudo, apague a tag e a Release e crie de novo. |
 | "Atualizações" diz que está em dia | Confira se a tag é maior que a versão instalada e se a Release foi *publicada* (não rascunho). |
-| "CERTIFICATE_VERIFY_FAILED" / "unable to get local issuer certificate" | A rede inspeciona a conexão segura e o certificado dela não é reconhecido. Peça à TI o certificado raiz da instituição (.pem/.crt em Base-64), salve-o como `ca-extra.pem` na pasta `dados` ao lado do `.exe` e reabra o programa. A verificação não é desligada. |
+| "CERTIFICATE_VERIFY_FAILED" / "unable to get local issuer certificate" | A rede inspeciona a conexão segura e o certificado dela não é reconhecido. Peça à TI o certificado raiz da instituição (.pem, .crt ou .cer) e, no programa, use **Configurações > Diagnóstico > Importar certificado da rede** (ele é salvo como `ca-extra.pem` na pasta de dados). A verificação não é desligada. |
 | Rede da instituição bloqueia o GitHub | A verificação falha em silêncio e o programa funciona normalmente. |
 
 ## Gerar o `.exe` no seu computador (sem GitHub)

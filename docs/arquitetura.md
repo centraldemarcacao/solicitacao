@@ -62,7 +62,7 @@ Exclusão em duas etapas: `excluido_em` (lixeira, restaurável por 30 dias) e re
 
 ## Atualização automática
 `updater.py` consulta `releases/latest` do repositório (`theme.REPOSITORIO_GITHUB`), baixa
-`AnotacoesHospitalares.exe`, confere o SHA-256 de `SHA256.txt`, gera um `.bat` que troca o arquivo
+`Anotacoes.exe`, confere o SHA-256 de `SHA256.txt`, gera um `.bat` que troca o arquivo
 (mantendo `.anterior`) e reabre o programa. Só aceita hosts `github.com` e `githubusercontent.com`.
 
 ## Convenções

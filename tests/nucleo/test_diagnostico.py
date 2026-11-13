@@ -33,7 +33,7 @@ class T(unittest.TestCase):
         erro = updater.ErroAtualizacao("x"); erro.__cause__ = causa
         r = self._github(side_effect=erro)
         self.assertEqual(r.estado, d.ERRO)
-        self.assertIn("ca-extra.pem", r.mensagem)
+        self.assertIn("Importar certificado", r.mensagem)
 
     def test_github_dns_timeout_http(self):
         for causa, trecho in ((urllib.error.URLError(socket.gaierror(11001, "x")), "DNS"),
@@ -64,7 +64,7 @@ class T(unittest.TestCase):
         self.assertEqual(self._supabase({"side_effect": urllib.error.HTTPError("u", 401, "x", {}, None)}).estado, d.AVISO)
         self.assertEqual(self._supabase({"side_effect": urllib.error.HTTPError("u", 500, "x", {}, None)}).estado, d.ERRO)
         cert = urllib.error.URLError(ssl.SSLCertVerificationError(1, "x"))
-        self.assertIn("ca-extra.pem", self._supabase({"side_effect": cert}).mensagem)
+        self.assertIn("Importar certificado", self._supabase({"side_effect": cert}).mensagem)
         self.assertEqual(self._supabase({"side_effect": OSError("sem rede")}).estado, d.ERRO)
 
     def test_supabase_usa_ssl_verificado_e_nao_vaza_a_chave(self):

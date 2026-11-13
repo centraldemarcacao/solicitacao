@@ -27,10 +27,9 @@ from anotacoes.caminhos import pasta_programa
 NOME_CA_EXTRA = "ca-extra.pem"
 
 MENSAGEM_CERTIFICADO = (
-    "O certificado de segurança do servidor não é reconhecido neste computador "
-    "(comum em redes que inspecionam a conexão). Peça à TI o certificado raiz da "
-    f"instituição em formato .pem e salve-o como \"{NOME_CA_EXTRA}\" na pasta \"dados\", "
-    "ao lado do programa."
+    "O certificado de segurança da rede não é reconhecido neste computador. "
+    "Em Configurações > Diagnóstico, use \"Importar certificado da rede\" "
+    "e escolha o certificado raiz da instituição (peça à TI, .pem ou .cer)."
 )
 
 
@@ -40,6 +39,35 @@ def pastas_ca_extra() -> List[str]:
     if local:
         pastas.append(os.path.join(local, "AnotacoesHospitalares"))
     return pastas
+
+
+def importar_certificado(origem: str, pasta_destino: str) -> str:
+    """Valida um certificado (.pem/.crt/.cer, texto ou binário) e o salva como
+    `ca-extra.pem` em `pasta_destino`. Devolve o caminho gravado. ValueError se o
+    arquivo não for um certificado."""
+    try:
+        with open(origem, "rb") as arq:
+            bruto = arq.read(2_000_000)
+    except OSError as exc:
+        raise ValueError(f"Não foi possível ler o arquivo: {exc}") from None
+    if b"-----BEGIN CERTIFICATE-----" in bruto:
+        pem = bruto.decode("ascii", "ignore")
+    else:
+        try:
+            pem = ssl.DER_cert_to_PEM_cert(bruto)
+        except Exception:
+            raise ValueError("O arquivo não parece ser um certificado "
+                             "(use o formato .pem, .crt ou .cer).") from None
+    try:
+        ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT).load_verify_locations(cadata=pem)
+    except ssl.SSLError:
+        raise ValueError("O arquivo não contém um certificado válido.") from None
+    os.makedirs(pasta_destino, exist_ok=True)
+    destino = os.path.join(pasta_destino, NOME_CA_EXTRA)
+    with open(destino + ".tmp", "w", encoding="ascii") as arq:
+        arq.write(pem)
+    os.replace(destino + ".tmp", destino)
+    return destino
 
 
 def _carregar_repositorio_windows(contexto: ssl.SSLContext) -> None:

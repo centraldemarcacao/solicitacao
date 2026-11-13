@@ -79,6 +79,17 @@ class T(unittest.TestCase):
                 updater.baixar(info(), d, cancelar=ev)
             self.assertEqual(os.listdir(d), [])
 
+    def test_release_com_nome_novo_ou_antigo_do_exe(self):
+        def rel(*nomes):
+            return {"tag_name": "v9.9.9", "assets": [
+                {"name": n, "browser_download_url": "u:" + n, "size": 5} for n in nomes]}
+        for nomes, esperado in (
+                (("Anotacoes.exe", "AnotacoesHospitalares.exe", "SHA256.txt"), "u:Anotacoes.exe"),
+                (("AnotacoesHospitalares.exe", "SHA256.txt"), "u:AnotacoesHospitalares.exe"),
+                (("Anotacoes.exe", "SHA256.txt"), "u:Anotacoes.exe")):
+            self.assertEqual(updater.interpretar_release(rel(*nomes)).url_exe, esperado)
+        self.assertIsNone(updater.interpretar_release(rel("Anotacoes.exe")))   # sem SHA256
+
     def test_erro_de_certificado_tem_mensagem_clara(self):
         import ssl, urllib.error
         def fake(req, timeout=0, **_kw):
@@ -86,7 +97,7 @@ class T(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", fake):
             with self.assertRaises(updater.ErroAtualizacao) as cm:
                 updater.buscar_ultima("usuario/repo")
-        self.assertIn("ca-extra.pem", str(cm.exception))
+        self.assertIn("Importar certificado", str(cm.exception))
         self.assertNotIn("CERTIFICATE_VERIFY_FAILED", str(cm.exception))
 
     def test_usa_verificacao_de_certificado(self):

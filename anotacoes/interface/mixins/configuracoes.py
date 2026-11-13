@@ -9,15 +9,17 @@ Página "Configurações" (engrenagem no rodapé do menu ou Ctrl + ,):
     (atualizações) e o Supabase (nuvem). Os testes rodam em segundo plano.
 """
 
+import os
 import queue
 import threading
+from tkinter import filedialog
 
 import customtkinter as ctk
 
 from anotacoes import theme as T
 from anotacoes.interface.icons import icone
 from anotacoes.interface.widgets import alinhar_esquerda, fonte
-from anotacoes.nucleo import diagnostico, inicializacao, seguranca
+from anotacoes.nucleo import certificados, diagnostico, inicializacao, seguranca
 
 ABAS = ("Segurança", "Diagnóstico")
 ROTULOS_BLOQUEIO = {m: (f"{m} minuto" if m == 1 else f"{m} minutos")
@@ -175,6 +177,8 @@ class ConfiguracoesMixin:
         barra.pack(fill="x", pady=(14, 8))
         self.btn_testar = self._botao(barra, "Testar conexão", self.testar_conexoes, destaque=True)
         self.btn_testar.pack(side="left")
+        self._botao(barra, "Importar certificado da rede", self.importar_certificado_rede).pack(
+            side="left", padx=(10, 0))
         self.lbl_testando = ctk.CTkLabel(barra, text="", font=fonte(13), text_color=T.TEXTO_SUAVE)
         self.lbl_testando.pack(side="left", padx=14)
         self.quadro_testes = ctk.CTkFrame(aba, fg_color="transparent")
@@ -194,6 +198,22 @@ class ConfiguracoesMixin:
             ctk.CTkLabel(self.quadro_info, text=valor, font=fonte(13), text_color=T.TEXTO_SUAVE,
                          anchor="w", wraplength=560).grid(
                 row=i, column=1, sticky="w", padx=(10, 0), pady=1)
+
+    def importar_certificado_rede(self) -> None:
+        """Para redes que inspecionam a conexão segura: o certificado raiz da instituição
+        (fornecido pela TI) passa a ser aceito. A verificação continua ligada."""
+        caminho = filedialog.askopenfilename(
+            parent=self, title="Escolher o certificado raiz da rede",
+            filetypes=[("Certificados", "*.pem *.crt *.cer"), ("Todos os arquivos", "*.*")])
+        if not caminho:
+            return
+        try:
+            certificados.importar_certificado(caminho, os.path.dirname(self.db.caminho))
+        except ValueError as exc:
+            self.toast.mostrar(str(exc), "erro", 6000)
+            return
+        self.toast.mostrar("Certificado importado. Clique em \"Testar conexão\" para conferir.",
+                           "sucesso", 5000)
 
     # --- Teste de conexão (em segundo plano) -------------------------------------
     def testar_conexoes(self) -> None:

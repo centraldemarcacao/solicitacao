@@ -87,7 +87,7 @@ A simulação valida widgets e fluxos, mas não a aparência; confira o visual n
 * **No seu computador:** duplo clique em `scripts/build.bat` (resultado em `dist/`).
 
 ## Instalação e uso
-Copie `AnotacoesHospitalares.exe` para uma pasta com permissão de gravação (Documentos, Área de
+Copie `Anotacoes.exe` para uma pasta com permissão de gravação (Documentos, Área de
 Trabalho). Os dados (banco, backups e preferências) ficam em
 `%LOCALAPPDATA%\AnotacoesHospitalares`, uma pasta fixa do usuário: não dependem de onde o `.exe`
 está. Se já havia uma pasta `dados` ao lado do `.exe`, ela é copiada para lá sozinha. **Copie essa pasta de vez em quando para um pen drive ou nuvem pessoal.**

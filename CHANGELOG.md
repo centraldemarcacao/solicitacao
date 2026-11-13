@@ -1,10 +1,13 @@
 # Histórico de versões
 
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
-(tag `v2.11.1`); o programa instalado se atualiza sozinho a partir delas.
+(tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
-## 2.11.1 — Segurança, início com o Windows e diagnóstico
+## 2.11.0 — Segurança, início com o Windows e diagnóstico
+* **Projeto Supabase fixo:** o endereço e a chave pública do projeto passam a ficar no arquivo `anotacoes/nuvem/projeto.py` (preenchidos uma vez). Com os dois preenchidos, a página Nuvem pede **só e-mail e senha**, e o mesmo projeto vale em todos os computadores. Para dar acesso a outra pessoa, basta criar um novo usuário no Supabase.
+* **Novo nome do arquivo:** o executável passa a se chamar `Anotacoes.exe` (sem acento, porque o GitHub troca letras acentuadas no nome dos arquivos publicados e isso quebraria a atualização). A Release também traz uma cópia com o nome antigo, `AnotacoesHospitalares.exe`, para que os programas já instalados continuem se atualizando. Quem já usa o programa mantém o arquivo como está; o nome só muda em novas instalações. O nome mostrado na janela continua o que você definir em Personalizar.
 * **Dados em pasta fixa:** o programa passa a guardar tudo em `%LOCALAPPDATA%\AnotacoesHospitalares`, e não mais ao lado do `.exe`. Mover o `.exe`, baixá-lo de novo ou atualizá-lo não faz mais os dados "sumirem". Quem já tinha a pasta `dados` ao lado do `.exe` tem o conteúdo **copiado** na primeira abertura (a original fica como backup, com um `LEIA-ME.txt`).
+* **Certificado da rede:** novo botão **Importar certificado da rede** (Configurações > Diagnóstico) que valida e instala o certificado raiz fornecido pela TI, sem editar arquivos à mão. O aviso de erro agora quebra em linhas (antes ficava cortado na janela). A verificação continua sempre ligada.
 * **Correção antes da publicação:** o atalho Ctrl + , fazia o programa fechar ao abrir ("bad event type or keysym COMMA"). Corrigido e coberto por teste.
 * **PIN ou senha** (Configurações > Segurança): o programa pode abrir e **bloquear sozinho** após 1 a 30
   minutos sem uso (**Ctrl + B** bloqueia na hora). Erros repetidos impõem espera crescente.
