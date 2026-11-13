@@ -1,0 +1,14 @@
+# Abre PRs sozinho quando há versão nova das dependências fixadas e das Actions.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
