@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Baixar o código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Ao publicar a tag v2.9.0 (ou 2.9.0), a versão exibida no programa vira 2.9.0 automaticamente.
       - name: Ajustar a versão do programa pela tag
