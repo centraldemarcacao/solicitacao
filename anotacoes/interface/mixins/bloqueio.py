@@ -13,6 +13,7 @@ nucleo/seguranca.py; leia a nota lá sobre o que isto protege e o que não prote
     usada para gravar os backups (os automáticos esperam o desbloqueio).
 """
 
+import logging
 import os
 import time
 import tkinter as tk
@@ -25,6 +26,8 @@ from anotacoes.interface.icons import icone
 from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
 from anotacoes.nucleo import seguranca
 from anotacoes.nucleo.identidade import titulo_completo
+
+log = logging.getLogger(__name__)
 
 INTERVALO_OCIOSIDADE_MS = 10_000
 
@@ -207,7 +210,7 @@ class BloqueioMixin:
                     >= self.seguranca.bloqueio_minutos * 60):
                 self.bloquear()
         except Exception:
-            pass
+            log.warning("Falha ignorada em _ciclo_bloqueio()", exc_info=True)
         self.after(INTERVALO_OCIOSIDADE_MS, self._ciclo_bloqueio)
 
     def esta_bloqueado(self) -> bool:
@@ -261,7 +264,7 @@ class BloqueioMixin:
             try:
                 self._ent_pin.focus_set()
             except Exception:
-                pass
+                log.debug("Falha ignorada em _refocar_pin()", exc_info=True)
 
     def _esconder_janelas(self) -> None:
         """Esconde diálogos abertos (detalhes, edição...) enquanto bloqueado. O aviso de
@@ -274,7 +277,7 @@ class BloqueioMixin:
                     filho.withdraw()
                     self._janelas_ocultas.append(filho)
                 except Exception:
-                    pass
+                    log.debug("Falha ignorada em _esconder_janelas()", exc_info=True)
 
     def _tentar_desbloquear(self) -> None:
         espera = self._limite_pin.segundos_restantes()
@@ -299,7 +302,7 @@ class BloqueioMixin:
             try:
                 self.db.backup_automatico()           # o de abertura foi adiado
             except Exception:
-                pass
+                log.warning("Falha ignorada em _desbloquear()", exc_info=True)
         painel, self._painel_bloqueio = self._painel_bloqueio, None
         self._bloqueado = False
         self._ent_pin = None
@@ -309,7 +312,7 @@ class BloqueioMixin:
             try:
                 janela.deiconify()
             except Exception:
-                pass
+                log.warning("Falha ignorada em _desbloquear()", exc_info=True)
         self._janelas_ocultas = []
         self._registrar_atividade()
 
@@ -356,7 +359,7 @@ class BloqueioMixin:
         try:
             self.db.backup_automatico(sobrescrever=True)
         except Exception:
-            pass
+            log.warning("Falha ignorada em _criptografar_backups_agora()", exc_info=True)
         return convertidos
 
     def alternar_criptografia_backups(self, ativo: bool) -> None:

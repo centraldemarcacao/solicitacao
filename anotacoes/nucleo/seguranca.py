@@ -9,7 +9,7 @@ O QUE PROTEGE
   * Os backups são gravados criptografados (AES-256-GCM) com a mesma senha.
 
 O QUE NÃO PROTEGE
-  * O banco "em uso" (dados/solicitacoes.db) continua legível para quem tiver acesso à
+  * O banco "em uso" (anotacoes_hospitalares.db, na pasta de dados) continua legível para quem tiver acesso à
     pasta do programa. Para isso, use também a proteção do Windows (conta de usuário
     com senha, BitLocker). O PIN é uma barreira contra o acesso casual.
   * "Esqueci o PIN": quem tem acesso à pasta pode apagar `seguranca.json` e o programa
@@ -21,6 +21,7 @@ backup é derivada da senha com scrypt e um sal próprio do arquivo, então o ba
 em qualquer computador que conheça a senha.
 """
 
+import logging
 import hashlib
 import hmac
 import os
@@ -28,6 +29,8 @@ import secrets
 from typing import Optional
 
 from anotacoes.nucleo.preferencias import Preferencias
+
+log = logging.getLogger(__name__)
 
 NOME_ARQUIVO = "seguranca.json"
 EXTENSAO_CRIPTOGRAFADO = ".dbx"
@@ -122,7 +125,7 @@ def _gravar_atomico(destino: str, dados: bytes) -> None:
         try:
             os.remove(provisorio)
         except OSError:
-            pass
+            log.debug("Falha ignorada em _gravar_atomico()", exc_info=True)
         raise
 
 
@@ -139,7 +142,7 @@ def descriptografar_arquivo(origem: str, destino: str, segredo: str) -> None:
 
 
 # ----------------------------------------------------------------------
-# Configuração (dados/seguranca.json)
+# Configuração (seguranca.json, na pasta de dados)
 # ----------------------------------------------------------------------
 class Seguranca:
     def __init__(self, caminho: str) -> None:

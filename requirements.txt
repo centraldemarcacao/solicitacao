@@ -1,4 +1,5 @@
-# Dependências para EXECUTAR o programa
-customtkinter>=5.2.2
-pillow>=10.0
-cryptography>=42
+# Dependências para EXECUTAR o programa (versões FIXAS: o build é reprodutível).
+# Para atualizar: troque a versão, rode os testes e faça o commit (o Dependabot abre PRs sozinho).
+customtkinter==5.2.2
+pillow==12.3.0
+cryptography==50.0.1

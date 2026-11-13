@@ -8,6 +8,7 @@ SHA-256 -> troca o arquivo quando o programa fecha -> reabre já atualizado.
 Os dados (pasta "dados") nunca são tocados.
 """
 
+import logging
 import hashlib
 import json
 import os
@@ -19,6 +20,8 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from anotacoes.nucleo.certificados import MENSAGEM_CERTIFICADO, contexto_ssl, erro_de_certificado
+
+log = logging.getLogger(__name__)
 
 NOME_EXE = "Anotacoes.exe"
 NOME_EXE_ANTIGO = "AnotacoesHospitalares.exe"   # nome até a v2.11.x; segue publicado, igual
@@ -151,7 +154,7 @@ def baixar(info: InfoAtualizacao, pasta: str, progresso=None, cancelar=None,
         try:
             os.remove(parcial)
         except OSError:
-            pass
+            log.debug("Falha ignorada em baixar()", exc_info=True)
         raise
 
 
@@ -271,7 +274,7 @@ def aplicar_atualizacao(novo: str, atual: str) -> None:
         try:
             os.replace(anterior, atual)           # volta a versão que funcionava
         except OSError:
-            pass
+            log.warning("Falha ignorada em aplicar_atualizacao()", exc_info=True)
         raise ErroAtualizacao(f"Não foi possível colocar a nova versão ({exc}).") from exc
 
 
@@ -317,7 +320,7 @@ def limpar_restos() -> None:
         try:
             os.remove(caminho)
         except OSError:
-            pass
+            log.debug("Falha ignorada em limpar_restos()", exc_info=True)
 
 
 def ficou_pendente() -> bool:

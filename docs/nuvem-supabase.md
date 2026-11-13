@@ -13,7 +13,7 @@ depois.
 * Em conflito, vale a alteração mais recente. Lixeira, restauração e exclusão definitiva também
   sincronizam; na exclusão definitiva o texto é apagado da nuvem.
 * Login com e-mail e senha de um usuário do projeto. A senha **não** é guardada; fica só um
-  token de sessão em `dados/nuvem.json`.
+  token de sessão em `nuvem.json` (pasta de dados, `%LOCALAPPDATA%\AnotacoesHospitalares`).
 * A tabela usa segurança por linha (RLS): cada conta só enxerga as próprias linhas.
   A chave pública sozinha não dá acesso a nenhum dado.
 

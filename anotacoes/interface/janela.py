@@ -14,10 +14,10 @@ Nome e logotipo: botão de lápis no menu lateral (veja mixins/identidade.py).
 Cores e fonte: veja anotacoes/theme.py.
 """
 
+import logging
 import os
 import re
 import tkinter as tk
-import traceback
 from datetime import date, datetime, timedelta
 from tkinter import messagebox
 
@@ -51,6 +51,7 @@ from anotacoes.interface.widgets import (
     fonte,
     tornar_modal,
 )
+from anotacoes.nucleo import inicializacao, registro_log
 from anotacoes.nucleo.database import (
     DIAS_LIXEIRA,
     MAX_DESCRICAO,
@@ -59,10 +60,10 @@ from anotacoes.nucleo.database import (
     STATUS_ATENDIDA,
     STATUS_PENDENTE,
     Database,
+    caminho_banco,
     normalizar,
     validar_campos,
 )
-from anotacoes.nucleo import inicializacao
 from anotacoes.nucleo.identidade import Identidade, titulo_completo
 from anotacoes.nucleo.preferencias import Preferencias
 from anotacoes.nucleo.util import (
@@ -79,6 +80,8 @@ from anotacoes.nucleo.util import (
     rotulo_retorno,
     situacao_retorno,
 )
+
+log = logging.getLogger(__name__)
 
 PAG_RESUMO = "resumo"
 PAG_NOVO = "novo"
@@ -136,8 +139,11 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self._total_lixeira = 0
 
         try:
-            self.db = Database()
+            caminho_db = caminho_banco()
+            registro_log.configurar(os.path.dirname(caminho_db))
+            self.db = Database(caminho_db)
         except Exception as exc:
+            log.error("Não foi possível abrir o banco de dados", exc_info=True)
             messagebox.showerror(
                 "Não foi possível iniciar",
                 "O banco de dados não pôde ser aberto ou criado.\n\n"
@@ -146,6 +152,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             )
             self.destroy()
             raise SystemExit(1)
+
+        self._tratar_integridade_do_banco()
 
         # Identidade (nome, subtítulo, logo, ícone) personalizada neste computador.
         self._identidade = Identidade(os.path.dirname(self.db.caminho))
@@ -238,10 +246,41 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self._montar_barra_lateral()
         self._montar_area()
 
+    def _tratar_integridade_do_banco(self) -> None:
+        """Se o banco falhou na checagem de integridade ao abrir, oferece restaurar o backup
+        íntegro mais recente (o arquivo danificado é guardado ao lado, nunca apagado)."""
+        problema = self.db.problema_integridade
+        if not problema:
+            return
+        resposta = messagebox.askyesno(
+            "Banco de dados com problema",
+            "O programa encontrou um problema no arquivo de dados:\n\n"
+            f"{problema[:300]}\n\n"
+            "Deseja restaurar agora o backup íntegro mais recente?\n"
+            "O arquivo atual será guardado ao lado, sem ser apagado, para análise.\n\n"
+            "Os registros feitos depois desse backup não serão recuperados.")
+        if resposta:
+            try:
+                usado = self.db.restaurar_ultimo_backup_valido()
+                messagebox.showinfo("Backup restaurado",
+                                    f"Dados restaurados a partir de {usado}.")
+                return
+            except ValueError as exc:
+                log.error("Restauração automática falhou: %s", exc)
+                messagebox.showerror("Não foi possível restaurar", str(exc))
+        if self.db.banco_ilegivel:
+            messagebox.showerror(
+                "Banco de dados ilegível",
+                "O arquivo de dados não pode ser aberto. Feche o programa, restaure um "
+                "backup na pasta de backups ou peça ajuda à TI.")
+            self.destroy()
+            raise SystemExit(1)
+
     def _ha_algo_para_ver_seguro(self) -> bool:
         try:
             return self.ha_algo_para_ver()
         except Exception:
+            log.warning("Falha ao verificar o resumo do dia", exc_info=True)
             return False
 
     def _restaurar_janela(self) -> None:
@@ -297,7 +336,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
                 filtro_periodo=self.filtro_periodo.get())
             self.prefs.salvar()
         except Exception:
-            pass
+            log.warning("Falha ignorada em _salvar_preferencias()", exc_info=True)
 
     def alternar_tema(self) -> None:
         """Pede a troca entre tema claro e escuro.
@@ -338,27 +377,21 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             try:
                 self.after_cancel(tarefa)
             except Exception:
-                pass
+                log.debug("Falha ignorada em _reconstruir_tudo()", exc_info=True)
         for filho in list(self.winfo_children()):
             if isinstance(filho, (ctk.CTkToplevel, tk.Toplevel)):
                 continue   # janelas abertas (diálogos) não fazem parte da tela principal
             try:
                 filho.destroy()
             except Exception:
-                pass
+                log.debug("Falha ignorada em _reconstruir_tudo()", exc_info=True)
         T.aplicar_tema(tema)
         self.configure(fg_color=T.FUNDO)
         self._construir_interface()
 
     def _recuperar_interface(self, exc) -> None:
         """Se a troca de tema falhar, volta ao tema claro; no pior caso pede para reabrir."""
-        try:
-            with open(os.path.join(os.path.dirname(self.db.caminho), "erros.log"),
-                      "a", encoding="utf-8") as arq:
-                arq.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] troca de tema\n"
-                          + "".join(traceback.format_exception(exc)) + "\n")
-        except Exception:
-            pass
+        log.error("Falha ao trocar o tema", exc_info=(type(exc), exc, exc.__traceback__))
         try:
             self._reconstruir_tudo("claro")
             self.mostrar_pagina(PAG_NOVO)
@@ -1504,21 +1537,15 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.withdraw()               # some da tela enquanto envia o que faltar
             self._sincronizar_ao_fechar()
         except Exception:
-            pass
+            log.warning("Falha ignorada em _ao_fechar()", exc_info=True)
         self.destroy()
 
     def _erro_inesperado(self, exc, valor, tb) -> None:
         """Erros não tratados: grava em erros.log e avisa sem fechar o programa."""
-        try:
-            pasta = os.path.dirname(self.db.caminho)
-            with open(os.path.join(pasta, "erros.log"), "a", encoding="utf-8") as arq:
-                arq.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}]\n")
-                arq.write("".join(traceback.format_exception(exc, valor, tb)) + "\n")
-        except Exception:
-            pass
+        log.error("Erro inesperado", exc_info=(exc, valor, tb))
         try:
             self.toast.mostrar(
                 "Ocorreu um erro inesperado. Detalhes gravados em erros.log.", "erro", 7000
             )
         except Exception:
-            pass
+            log.warning("Falha ignorada em _erro_inesperado()", exc_info=True)

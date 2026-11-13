@@ -11,8 +11,11 @@ Na atualização, o programa antigo chama `liberar()` antes de abrir o novo; mes
 `adquirir()` espera alguns segundos pelo mutex antes de desistir.
 """
 
+import logging
 import sys
 import time
+
+log = logging.getLogger(__name__)
 
 NOME_MUTEX = "Local\\AnotacoesHospitalares.UmaInstancia"
 ERRO_JA_EXISTE = 183
@@ -61,5 +64,5 @@ def liberar() -> None:
         k32.CloseHandle.argtypes = [wintypes.HANDLE]
         k32.CloseHandle(_handle)
     except Exception:
-        pass
+        log.debug("Falha ignorada em liberar()", exc_info=True)
     _handle = None

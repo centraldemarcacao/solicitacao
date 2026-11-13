@@ -8,6 +8,7 @@ Falhas de rede na verificação automática são silenciosas (rede institucional
 pode bloquear o GitHub); na verificação manual, o motivo é mostrado.
 """
 
+import logging
 import os
 import queue
 import sys
@@ -20,6 +21,8 @@ from anotacoes.atualizacao import updater
 from anotacoes.nucleo import instancia
 from anotacoes.interface.widgets import DialogoConfirmacao, centralizar, fonte, tornar_modal
 
+log = logging.getLogger(__name__)
+
 
 class AtualizacaoMixin:
     """Requer: self.db, self.toast, self.after, self.destroy."""
@@ -31,7 +34,7 @@ class AtualizacaoMixin:
         try:
             updater.limpar_restos()
         except Exception:
-            pass
+            log.warning("Falha ignorada em _iniciar_atualizacao()", exc_info=True)
         if updater.ficou_pendente():
             self.after(2500, lambda: self.toast.mostrar(
                 "A última atualização não foi aplicada. Baixe o .exe em Releases e copie por "
@@ -157,7 +160,7 @@ class AtualizacaoMixin:
         try:
             self.db.backup_automatico(sobrescrever=True)
         except Exception:
-            pass
+            log.warning("Falha ignorada em _finalizar_atualizacao()", exc_info=True)
         instancia.liberar()      # o programa novo precisa conseguir abrir enquanto este fecha
         try:
             resultado = updater.executar_troca(novo)

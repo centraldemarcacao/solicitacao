@@ -6,11 +6,14 @@ liga/desliga e horários), guardadas em dados/preferencias.json. Nunca impedem o
 arquivo ausente, vazio ou corrompido volta aos padrões.
 """
 
+import logging
 import json
 import os
 
 from anotacoes.nucleo.modelos import validar_modelos
 from anotacoes.nucleo.pausas import horarios_validos
+
+log = logging.getLogger(__name__)
 
 CHAVE_ALERTAS_PAUSA = "alertas_pausa"
 CHAVE_HORARIOS_PAUSA = "horarios_pausa"
@@ -87,5 +90,5 @@ class Preferencias:
             try:
                 os.remove(temporario)
             except OSError:
-                pass
+                log.warning("Falha ignorada em salvar()", exc_info=True)
             return False

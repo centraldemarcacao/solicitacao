@@ -9,9 +9,12 @@ Grava um valor em HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersio
 (python main.py) fica indisponível.
 """
 
+import logging
 import os
 import sys
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 CHAVE_RUN = r"Software\Microsoft\Windows\CurrentVersion\Run"
 NOME_VALOR = "AnotacoesHospitalares"
@@ -81,4 +84,4 @@ def corrigir_caminho() -> None:
         if atual and atual != comando():
             ativar()
     except Exception:
-        pass
+        log.warning("Falha ignorada em corrigir_caminho()", exc_info=True)

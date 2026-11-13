@@ -10,12 +10,12 @@ Ative em **Configurações** (engrenagem no rodapé do menu, ou Ctrl + ,) > **Se
   de backups. Podem ser abertos em outro computador que conheça a senha. Use 8+ caracteres.
 
 ## O que NÃO protege
-* O banco em uso (`dados/solicitacoes.db`) continua legível por quem tiver acesso à pasta do programa.
+* O banco em uso (`anotacoes_hospitalares.db`, em `%LOCALAPPDATA%\AnotacoesHospitalares`) continua legível por quem tiver acesso a essa pasta.
   Combine com conta do Windows com senha e BitLocker. O PIN é uma barreira contra acesso casual.
 * A espera por erros de PIN vale só enquanto o programa está aberto.
 
 ## Esqueci o PIN
-Feche o programa e apague `dados/seguranca.json`: ele abre sem PIN. Os backups `.dbx` continuam
+Feche o programa e apague `seguranca.json` da pasta de dados (`%LOCALAPPDATA%\AnotacoesHospitalares`): ele abre sem PIN. Os backups `.dbx` continuam
 exigindo a senha antiga: **sem ela, não há como recuperá-los**. Guarde-a em local seguro.
 
 ## Iniciar com o Windows

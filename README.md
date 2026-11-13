@@ -12,6 +12,7 @@ entregue como um único `.exe` que se atualiza sozinho.
   ordenação por coluna, edição, status em lote e detalhes.
 * **Exportar e imprimir**: CSV para Excel e página de impressão.
 * **Lixeira** (30 dias) e **Backup** automático/manual com restauração.
+* **Banco protegido**: modo WAL e checagem de integridade ao abrir; se o arquivo estiver danificado, o programa oferece restaurar o último backup íntegro (o arquivo ruim é guardado, não apagado).
 * **Desfazer** (Ctrl+Z), atalhos de teclado (F1 mostra todos) e tema claro/escuro.
 * **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline.
 * **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); horários editáveis e liga/desliga no sino do menu (Ctrl + L).
@@ -45,6 +46,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   ├── diagnostico.py     #     informações e teste de conexão
 │   │   ├── certificados.py    #     HTTPS: certificados do Windows e ca-extra.pem
 │   │   ├── exportar.py        #     CSV e página de impressão
+│   │   ├── registro_log.py    #     erros.log com rotação
 │   │   └── identidade.py      #     nome, subtítulo, logo e ícone
 │   ├── nuvem/                 #   Supabase (sem interface)
 │   │   ├── cliente.py         #     login e API REST
@@ -62,14 +64,16 @@ entregue como um único `.exe` que se atualiza sozinho.
 ├── installer/anotacoes.iss    # script do instalador (Inno Setup, usado pelo Actions)
 ├── scripts/build.bat          # gera o .exe no seu computador
 ├── docs/                      # guias (segurança, arquitetura, publicar versão, nuvem, personalizar)
-├── .github/workflows/         # CI: testa, gera o .exe e publica Releases
+├── .github/workflows/         # ci.yml (testes) e release.yml (gera o .exe e publica Releases em tags)
+├── .github/dependabot.yml     # atualizações das dependências fixadas
 ├── CHANGELOG.md               # histórico de versões
 ├── requirements.txt           # dependências de execução
 └── requirements-dev.txt       # + PyInstaller
 ```
 
 ## Começando (desenvolvimento)
-Requer Python 3.10+ (Windows; a interface usa a fonte Segoe UI).
+Requer Python 3.10+ (Windows; a interface usa a fonte Segoe UI). As dependências têm versão fixa
+(`requirements.txt`); para gerar o `.exe` use `requirements-dev.txt`.
 
 ```
 python -m pip install -r requirements.txt
@@ -86,9 +90,11 @@ python tests/interface/simulacao_interface.py     # simulação da interface (se
 A simulação valida widgets e fluxos, mas não a aparência; confira o visual no Windows.
 
 ## Gerar o `.exe`
-* **No GitHub (recomendado):** cada envio para `main` roda os testes e gera o `.exe` (aba
-  **Actions**). Ao criar uma tag `vX.Y.Z`, o `.exe` e o `SHA256.txt` são publicados em **Releases**
-  e os programas instalados se atualizam sozinhos. Veja [docs/publicar-versao.md](docs/publicar-versao.md).
+* **No GitHub (recomendado):** cada envio para `main` (e cada pull request) roda os testes e a
+  verificação da interface (aba **Actions**), sem gerar `.exe`. Ao criar uma tag `vX.Y.Z`, os mesmos
+  testes rodam de novo (**todos obrigatórios**) e, só se passarem, o `.exe`, o instalador e o `SHA256.txt`
+  são publicados em **Releases** e os programas instalados se atualizam sozinhos. Para só baixar um `.exe`
+  de teste, rode **Actions > Publicar versão (.exe) > Run workflow** (não cria Release). Veja [docs/publicar-versao.md](docs/publicar-versao.md).
 * **No seu computador:** duplo clique em `scripts/build.bat` (resultado em `dist/`).
 
 ## Instalação e uso
@@ -121,8 +127,8 @@ Registros podem conter **dados pessoais sensíveis**. Antes de usar em produçã
 ## Problemas comuns
 | Sintoma | Solução |
 |---------|---------|
-| `.exe` abre e fecha na hora | Gere novamente (o build usa `--collect-all customtkinter`); veja `dados/erros.log`. |
+| `.exe` abre e fecha na hora | Gere novamente (o build usa `--collect-all customtkinter`); veja `erros.log` na pasta de dados. |
 | Antivírus/SmartScreen bloqueia | Falso positivo comum com `--onefile`; peça liberação à TI (o `SHA256.txt` da Release serve de conferência). |
 | "Python não encontrado" no `build.bat` | Instale o Python marcando *Add Python to PATH* (não pela Microsoft Store). |
-| Aviso de erro inesperado | Veja `dados/erros.log`. |
+| Aviso de erro inesperado | Veja `erros.log` na pasta de dados (`%LOCALAPPDATA%\AnotacoesHospitalares`; é rotativo, com cópias `.1` a `.3`). |
 | Textos pequenos demais | Em telas pequenas a interface reduz de propósito; use uma tela maior ou diminua a escala do Windows. |

@@ -14,6 +14,7 @@ Os horários e a regra de "já avisei hoje" ficam em nucleo/pausas.py.
     preferencias.json ("alertas_pausa" e "horarios_pausa").
 """
 
+import logging
 from datetime import datetime
 
 import customtkinter as ctk
@@ -24,6 +25,8 @@ from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
 from anotacoes.nucleo import inicializacao
 from anotacoes.nucleo.pausas import (HORARIOS_PADRAO, MODELOS, interpretar_horario,
                                      marcar_avisada, montar_pausas, pausa_devida)
+
+log = logging.getLogger(__name__)
 
 INTERVALO_MS = 1000          # com 1 s o aviso sai em HH:MM:00 (no máximo 1 s depois)
 BIPES = 3                    # quantas vezes o sinal sonoro se repete
@@ -39,7 +42,7 @@ def _tocar_sinal(janela) -> None:
         try:
             janela.bell()
         except Exception:
-            pass
+            log.debug("Falha ignorada em _tocar_sinal()", exc_info=True)
 
 
 class DialogoPausa(ctk.CTkToplevel):
@@ -99,7 +102,7 @@ class DialogoPausa(ctk.CTkToplevel):
             self.lift()
             self.focus_force()
         except Exception:
-            pass
+            log.debug("Falha ignorada em _trazer_para_frente()", exc_info=True)
 
 
 class DialogoHorariosPausa(ctk.CTkToplevel):
@@ -195,7 +198,7 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
             self.lift()
             self.focus_force()
         except Exception:
-            pass
+            log.debug("Falha ignorada em _focar()", exc_info=True)
 
     def _restaurar(self) -> None:
         for chave, entrada in self.entradas.items():
@@ -257,7 +260,7 @@ class PausasMixin:
             try:
                 anterior.destroy()
             except Exception:
-                pass
+                log.warning("Falha ignorada em _avisar_pausa()", exc_info=True)
         try:
             self._dialogo_pausa = DialogoPausa(self, pausa)
         except Exception:
@@ -300,7 +303,7 @@ class PausasMixin:
                     aberto.focus_force()
                     return
             except Exception:
-                pass
+                log.warning("Falha ignorada em configurar_alertas_pausa()", exc_info=True)
         inicio = inicializacao.ativo() if inicializacao.suportado() else None
         self._dialogo_horarios = DialogoHorariosPausa(
             self, self.prefs.alertas_pausa, self.prefs.horarios_pausa,

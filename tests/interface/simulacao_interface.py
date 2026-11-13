@@ -279,6 +279,10 @@ def check(cond, msg):
 
 from anotacoes import theme as _T0
 perfil_nome_padrao = _T0.NOME_PADRAO
+# A simulação cobre o formulário completo da Nuvem (endereço + chave): ignora o projeto fixo
+# de anotacoes/nuvem/projeto.py, que já vem preenchido no repositório.
+from anotacoes.nuvem import projeto as _projeto_sem_fixo
+_projeto_sem_fixo.projeto_fixo = lambda *a, **k: None
 app = gui.App()
 check(not mb.erros, "aplicativo abre sem erros (todos os widgets aceitos pela API)")
 check(app.paginas["novo"].mapped and not app.paginas["historico"].mapped, "página inicial = Novo registro")

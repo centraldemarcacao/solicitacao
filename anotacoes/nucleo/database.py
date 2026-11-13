@@ -16,6 +16,7 @@ Recursos:
   - migração automática de bancos criados por versões anteriores.
 """
 
+import logging
 import os
 import shutil
 import sqlite3
@@ -27,6 +28,8 @@ from typing import Iterable, List, Optional, Tuple
 
 from anotacoes.caminhos import empacotado, pasta_programa
 from anotacoes.nucleo import seguranca
+
+log = logging.getLogger(__name__)
 
 # ----------------------------------------------------------------------
 # Constantes
@@ -244,7 +247,7 @@ def _migrar_dados(origem: str, destino: str) -> bool:
                       "e passam a ser usados de lá, mesmo se o .exe mudar de pasta.\n"
                       "Esta pasta é só uma cópia antiga: pode ser guardada como backup.\n")
     except OSError:
-        pass
+        log.warning("Falha ignorada em _migrar_dados()", exc_info=True)
     return True
 
 
@@ -292,7 +295,14 @@ class Database:
         # sessão, informada ao desbloquear); sem ela, backups automáticos são adiados.
         self.backup_criptografado = False
         self.backup_segredo: Optional[str] = None
-        self._inicializar()
+        # Modo do diário do SQLite ("wal" quando possível) e resultado da checagem de
+        # integridade feita ao abrir (veja verificar_integridade / restaurar_ultimo_backup_valido).
+        self.modo_journal = "delete"
+        self.problema_integridade: Optional[str] = None
+        self.banco_ilegivel = False
+        self._checar_ao_abrir()
+        if not self.banco_ilegivel:
+            self._inicializar()
 
     # ------------------------------------------------------------------
     # Infraestrutura
@@ -300,13 +310,66 @@ class Database:
     def _conectar(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.caminho, timeout=10)
         conn.execute("PRAGMA foreign_keys = ON;")
+        if self.modo_journal == "wal":
+            # NORMAL só é seguro com WAL (a durabilidade do último commit é trocada por
+            # velocidade, sem risco de corromper o arquivo).
+            conn.execute("PRAGMA synchronous = NORMAL;")
         conn.create_function("norm", 1, normalizar)  # busca sem acentos
         return conn
+
+    def _checar_ao_abrir(self) -> None:
+        """Roda o `quick_check` do SQLite no banco existente. Não altera nada: só registra
+        o resultado em `problema_integridade` (a interface oferece restaurar um backup)."""
+        try:
+            existe = os.path.getsize(self.caminho) > 0
+        except OSError:
+            existe = False
+        if not existe:
+            return
+        ok, detalhe = self.verificar_integridade()
+        if ok:
+            return
+        self.problema_integridade = detalhe
+        # "Ilegível": o SQLite nem consegue abrir o arquivo (não vale tentar migrar).
+        self.banco_ilegivel = detalhe.startswith("ilegível")
+        log.error("Verificação de integridade falhou ao abrir %s: %s", self.caminho, detalhe)
+
+    def verificar_integridade(self) -> Tuple[bool, str]:
+        """(True, 'ok') se o banco passa no `PRAGMA quick_check`; senão (False, detalhe)."""
+        try:
+            conn = sqlite3.connect(self.caminho, timeout=10)
+        except sqlite3.Error as exc:
+            return False, f"ilegível: {exc}"
+        try:
+            linhas = [str(l[0]) for l in conn.execute("PRAGMA quick_check").fetchall()]
+        except sqlite3.DatabaseError as exc:
+            return False, f"ilegível: {exc}"
+        finally:
+            conn.close()
+        if linhas == ["ok"]:
+            return True, "ok"
+        return False, "; ".join(linhas[:5])
+
+    def _ativar_wal(self, conn: sqlite3.Connection) -> None:
+        """Liga o modo WAL (escritas mais seguras contra queda de energia e leitura sem
+        bloquear a escrita). O modo fica gravado no arquivo. Em pastas que não o aceitam
+        (ex.: algumas unidades de rede), o SQLite mantém o modo anterior."""
+        try:
+            modo = str(conn.execute("PRAGMA journal_mode = WAL;").fetchone()[0]).lower()
+        except sqlite3.Error:
+            log.warning("Não foi possível ativar o modo WAL.", exc_info=True)
+            return
+        self.modo_journal = modo
+        if modo != "wal":
+            log.warning("O modo WAL não está disponível em %s (modo: %s).", self.caminho, modo)
+        else:
+            conn.execute("PRAGMA synchronous = NORMAL;")
 
     def _inicializar(self) -> None:
         """Cria a tabela (se não existir) e migra bancos de versões anteriores."""
         conn = self._conectar()
         try:
+            self._ativar_wal(conn)
             conn.executescript(SCHEMA_SQL)
             existentes = {linha[1] for linha in conn.execute("PRAGMA table_info(solicitacoes)")}
             for coluna, definicao in COLUNAS_NOVAS.items():
@@ -654,6 +717,8 @@ class Database:
         copia = sqlite3.connect(provisorio)
         try:
             origem.backup(copia)
+            # O backup é um arquivo único e autônomo (sem -wal/-shm ao lado).
+            copia.execute("PRAGMA journal_mode = DELETE;").fetchone()
         except BaseException:
             copia.close()
             origem.close()
@@ -674,7 +739,7 @@ class Database:
         try:
             os.remove(caminho)
         except OSError:
-            pass
+            log.debug("Falha ignorada em _remover_se_existe()", exc_info=True)
 
     def fazer_backup(self, nome: Optional[str] = None) -> str:
         """Cria um backup agora e aplica a rotação. Retorna o caminho do arquivo."""
@@ -746,7 +811,7 @@ class Database:
                 try:
                     os.remove(caminho)
                 except OSError:
-                    pass
+                    log.debug("Falha ignorada em _aplicar_rotacao()", exc_info=True)
 
     @staticmethod
     def _abrir_somente_leitura(caminho: str) -> sqlite3.Connection:
@@ -845,6 +910,11 @@ class Database:
         seguranca_copia = self.fazer_backup(
             f"antes_da_restauracao_{datetime.now():%Y-%m-%d_%H%M%S}{self._extensao_backup()}"
         )
+        self._copiar_conteudo_de(caminho)
+        return seguranca_copia
+
+    def _copiar_conteudo_de(self, caminho: str) -> None:
+        """Substitui o conteúdo do banco atual pelo do arquivo `caminho` (já validado)."""
         origem = self._abrir_somente_leitura(caminho)
         destino = self._conectar()
         try:
@@ -854,7 +924,50 @@ class Database:
             destino.close()
         self._inicializar()  # backups antigos podem não ter as colunas novas
         self.sync_pos_restauracao()
-        return seguranca_copia
+
+    def restaurar_ultimo_backup_valido(self, segredo: Optional[str] = None) -> str:
+        """Usado quando a checagem de integridade falha: guarda o arquivo danificado ao lado
+        (`<banco>.corrompido-AAAA-MM-DD_HHMMSS`) e restaura o backup mais recente que abre e
+        está íntegro. Backups criptografados entram se a senha (`segredo` ou a da sessão)
+        servir. Retorna o nome do backup usado. Lança ValueError se nenhum serve."""
+        senha = segredo or self.backup_segredo
+        for item in self.listar_backups():
+            if item["nome"].startswith("antes_da_restauracao_"):
+                continue            # cópias de segurança de um estado que pode já estar ruim
+            temporario = None
+            caminho = item["caminho"]
+            try:
+                if item["criptografado"]:
+                    if not senha or not seguranca.criptografia_disponivel():
+                        continue
+                    temporario = os.path.join(self.pasta_backups(),
+                                              f"restauracao_{uuid.uuid4().hex}.tmp")
+                    seguranca.descriptografar_arquivo(caminho, temporario, senha)
+                    caminho = temporario
+                self._validar_backup(caminho)
+                self._guardar_banco_danificado()
+                self._copiar_conteudo_de(caminho)
+            except (ValueError, OSError, sqlite3.Error):
+                log.warning("Backup %s não serve para a restauração automática.",
+                            item["nome"], exc_info=True)
+                continue
+            finally:
+                if temporario:
+                    self._remover_se_existe(temporario)
+            self.problema_integridade = None
+            self.banco_ilegivel = False
+            log.warning("Banco restaurado automaticamente a partir de %s.", item["nome"])
+            return item["nome"]
+        raise ValueError("Nenhum backup íntegro foi encontrado para restaurar.")
+
+    def _guardar_banco_danificado(self) -> None:
+        """Move o banco (e os arquivos -wal/-shm) para o lado, para a restauração começar
+        de um arquivo novo sem perder o original para análise."""
+        carimbo = f"{datetime.now():%Y-%m-%d_%H%M%S}"
+        for sufixo in ("", "-wal", "-shm", "-journal"):
+            origem = self.caminho + sufixo
+            if os.path.exists(origem):
+                os.replace(origem, f"{self.caminho}.corrompido-{carimbo}{sufixo}")
 
     # ------------------------------------------------------------------
     # Sincronização com a nuvem (usado por nuvem/sincronizacao.py)

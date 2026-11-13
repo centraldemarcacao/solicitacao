@@ -3,6 +3,22 @@
 Formato: versão mais recente primeiro. As versões são publicadas em **Releases**
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
+## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Banco em modo WAL** (`journal_mode=WAL`, `synchronous=NORMAL`): mais resistente a queda de energia e
+  a travamentos. Os backups continuam sendo um arquivo único. Se a pasta não aceitar WAL, o programa segue
+  no modo antigo e registra o aviso.
+* **Checagem de integridade ao abrir** (`PRAGMA quick_check`): se o banco estiver danificado, o programa
+  pergunta se deve **restaurar o backup íntegro mais recente** (inclusive criptografado, se o PIN já foi
+  informado). O arquivo danificado fica guardado ao lado (`.corrompido-AAAA-MM-DD_HHMMSS`).
+* **Registro de falhas com rotação**: `erros.log` passa a ter no máximo 512 KB (mais 3 cópias antigas) e
+  recebe também as falhas que antes eram ignoradas em silêncio.
+* **Projeto Supabase fixo** preenchido em `anotacoes/nuvem/projeto.py` (a página Nuvem pede só e-mail e senha).
+* **Publicação**: workflows separados. `ci.yml` testa a cada push e pull request (Python 3.10, 3.12 e 3.13,
+  simulação da interface e Tk real); `release.yml` só roda em tags e **não publica se algum teste falhar**
+  (antes, a simulação, o Tk real e o teste "o executável abre" não bloqueavam a entrega).
+* **Dependências com versão fixa** e Dependabot para propor atualizações.
+* Documentação corrigida (nome real do banco, pasta de dados, troca do `.exe` sem script).
+
 ## 2.12.0 — Modelos de descrição, instalador e boas-vindas
 * **Modelos de descrição:** botões com frases prontas ("Solicita água.", "Solicita travesseiro."...) no
   formulário Novo registro. Um clique insere o texto (em nova linha, se já houver algo). **Editar modelos**

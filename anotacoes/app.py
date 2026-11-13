@@ -4,7 +4,10 @@ app.py
 Inicialização do programa. Use `python main.py` (ou `python -m anotacoes`).
 """
 
+import logging
 import sys
+
+log = logging.getLogger(__name__)
 
 
 def _identificar_aplicativo() -> None:
@@ -18,7 +21,7 @@ def _identificar_aplicativo() -> None:
             "ligacontraocancer.solicitacoes"
         )
     except Exception:
-        pass
+        log.debug("Falha ignorada em _identificar_aplicativo()", exc_info=True)
 
 
 def main(argv=None) -> None:
@@ -47,4 +50,4 @@ def _avisar_ja_aberto() -> None:
                             "(procure-o na barra de tarefas).")
         raiz.destroy()
     except Exception:
-        pass
+        log.debug("Falha ignorada em _avisar_ja_aberto()", exc_info=True)

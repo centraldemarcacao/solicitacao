@@ -1,7 +1,7 @@
 # Arquitetura
 
 Aplicativo desktop (Windows) em Python 3.10+ com CustomTkinter e SQLite, distribuído como um
-único `.exe` (PyInstaller, gerado pelo GitHub Actions).
+único `.exe` (PyInstaller, gerado pelo GitHub Actions ao publicar uma tag de versão).
 
 ## Camadas
 
@@ -40,12 +40,23 @@ Se existir uma pasta `dados` antiga ao lado do `.exe`, ela é copiada para lá n
 
 | Arquivo | Conteúdo |
 |---------|----------|
-| `anotacoes.db` | Registros (SQLite). |
+| `anotacoes_hospitalares.db` | Registros (SQLite em modo WAL; pode haver `-wal` e `-shm` ao lado enquanto o programa está aberto). |
 | `backups/` | Cópias automáticas (1 por dia, 14 guardadas) e manuais. |
 | `preferencias.json` | Tema, tamanho da janela, filtros e ordenação. |
 | `identidade.json`, `logo_personalizado.png`, `icone_personalizado.ico` | Nome, logo e ícone personalizados. |
 | `nuvem.json` | Endereço, chave pública e token de sessão do Supabase (sem senha). |
-| `erros.log` | Falhas inesperadas. |
+| `erros.log` (+ `.1` a `.3`) | Registro de falhas e avisos, com rotação (512 KB por arquivo). Veja `nucleo/registro_log.py`. |
+
+## Integridade e registro de falhas
+* **WAL**: ao abrir, o banco é colocado em modo WAL (`PRAGMA journal_mode=WAL`, `synchronous=NORMAL`), mais
+  seguro contra queda de energia. Se a pasta não aceitar WAL (algumas unidades de rede), o SQLite mantém o
+  modo antigo e isso fica registrado em `erros.log`. Os backups saem sempre como arquivo único (sem `-wal`).
+* **Checagem ao abrir**: `Database` roda `PRAGMA quick_check` antes de qualquer alteração. Se falhar, a janela
+  oferece restaurar o backup íntegro mais recente (`restaurar_ultimo_backup_valido`); o arquivo danificado é
+  guardado ao lado como `.corrompido-AAAA-MM-DD_HHMMSS`, nunca apagado.
+* **Log**: cada módulo usa `log = logging.getLogger(__name__)`; `registro_log.configurar()` liga o arquivo
+  rotativo na inicialização. Evite `except: pass` silencioso: registre com `log.warning(..., exc_info=True)`
+  (ou `log.debug` para limpezas sem importância).
 
 Exclusão em duas etapas: `excluido_em` (lixeira, restaurável por 30 dias) e remoção definitiva.
 
@@ -62,8 +73,9 @@ Exclusão em duas etapas: `excluido_em` (lixeira, restaurável por 30 dias) e re
 
 ## Atualização automática
 `updater.py` consulta `releases/latest` do repositório (`theme.REPOSITORIO_GITHUB`), baixa
-`Anotacoes.exe`, confere o SHA-256 de `SHA256.txt`, gera um `.bat` que troca o arquivo
-(mantendo `.anterior`) e reabre o programa. Só aceita hosts `github.com` e `githubusercontent.com`.
+`Anotacoes.exe`, confere o SHA-256 de `SHA256.txt`, renomeia o `.exe` em uso para `.anterior`,
+coloca o novo no lugar e reabre o programa (sem script; só se o Windows não permitir a troca entra
+um script oculto e com tempo limite de reserva). Só aceita hosts `github.com` e `githubusercontent.com`.
 
 ## Convenções
 * Português nos nomes de domínio e textos; funções curtas; docstrings no início de cada módulo.
@@ -73,10 +85,16 @@ Exclusão em duas etapas: `excluido_em` (lixeira, restaurável por 30 dias) e re
   use `height=1` em faixas `CTkFrame`; não destrua um botão dentro do próprio clique (use `after`);
   a ordem do Tab segue a criação dos widgets (use *bindings* explícitos).
 
-## Testes
+## Testes e CI
 ```
 python -m unittest discover -s tests -t . -v      # unidade (sem tela, sem internet)
 python tests/interface/simulacao_interface.py     # simulação da interface (sem tela)
 ```
 `tests/` espelha os pacotes. O Supabase é simulado em `tests/nuvem/test_nuvem.py`. A simulação da
 interface valida widgets e fluxos, mas **não** a aparência: o visual deve ser conferido no Windows.
+
+* `.github/workflows/ci.yml`: testes de unidade (Python 3.10, 3.12 e 3.13), simulação da interface e teste de
+  fumaça com Tk real, a cada push em `main` e em pull requests. **Tudo é obrigatório.**
+* `.github/workflows/release.yml`: roda só em tags (`vX.Y.Z`) ou manualmente. Chama o `ci.yml` e só então gera o
+  `.exe`, testa se ele abre, gera o instalador e publica a Release. Se algum teste falhar, nada é publicado.
+* Dependências com versão fixa em `requirements.txt` / `requirements-dev.txt`; o Dependabot propõe atualizações.

@@ -18,11 +18,14 @@ trocam o certificado), o resultado é o erro
 A verificação nunca é desligada: o programa baixa um executável.
 """
 
+import logging
 import os
 import ssl
 from typing import List, Optional
 
 from anotacoes.caminhos import pasta_programa
+
+log = logging.getLogger(__name__)
 
 NOME_CA_EXTRA = "ca-extra.pem"
 
@@ -84,7 +87,7 @@ def _carregar_repositorio_windows(contexto: ssl.SSLContext) -> None:
                 try:
                     contexto.load_verify_locations(cadata=der)
                 except ssl.SSLError:
-                    pass
+                    log.warning("Falha ignorada em _carregar_repositorio_windows()", exc_info=True)
     # Aceita um certificado intermediário confiável como ponto de partida, como
     # fazem os navegadores (e o Python 3.13 por padrão).
     contexto.verify_flags |= getattr(ssl, "VERIFY_X509_PARTIAL_CHAIN", 0)

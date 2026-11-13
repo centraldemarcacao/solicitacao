@@ -12,12 +12,15 @@ Componentes visuais reutilizáveis (CustomTkinter):
   - DialogoConfirmacao  janela modal de confirmação (ex.: exclusão)
 """
 
+import logging
 from tkinter import ttk
 
 import customtkinter as ctk
 
 from anotacoes import theme as T
 from anotacoes.interface.icons import icone
+
+log = logging.getLogger(__name__)
 
 
 def fonte(tamanho: int = 14, peso: str = "normal") -> ctk.CTkFont:
@@ -33,7 +36,7 @@ def alinhar_esquerda(rotulo):
     try:
         rotulo._label.configure(justify="left")
     except Exception:
-        pass
+        log.debug("Falha ignorada em alinhar_esquerda()", exc_info=True)
     return rotulo
 
 
@@ -60,14 +63,14 @@ def tornar_modal(janela, pai, foco=None) -> None:
     try:
         janela.transient(pai)
     except Exception:
-        pass
+        log.debug("Falha ignorada em tornar_modal()", exc_info=True)
 
     def _ativar():
         try:
             janela.grab_set()
             (foco or janela).focus_force()
         except Exception:
-            pass
+            log.debug("Falha ignorada em _ativar()", exc_info=True)
 
     janela.after(150, _ativar)
     janela.bind("<Escape>", lambda _e: janela.destroy())

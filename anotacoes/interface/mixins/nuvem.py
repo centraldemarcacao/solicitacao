@@ -11,6 +11,7 @@ nuvem/sincronizacao.py e nuvem/cliente.py).
   - Sem internet o programa segue normal; o que ficou pendente é enviado depois.
 """
 
+import logging
 import os
 import queue
 import threading
@@ -29,6 +30,8 @@ from anotacoes.nucleo.preferencias import Preferencias
 from anotacoes.nuvem.sincronizacao import sincronizar, testar_conexao
 from anotacoes.nucleo.util import formatar_data, plural
 from anotacoes.interface.widgets import DialogoConfirmacao, fonte
+
+log = logging.getLogger(__name__)
 
 INTERVALO_CICLO_MS = 45_000      # verifica pendências a cada 45 s
 RENOVAR_A_CADA_S = 300           # puxa novidades da nuvem a cada 5 min
@@ -281,7 +284,7 @@ class NuvemMixin:
             try:
                 self.db.sync_resetar()
             except Exception:
-                pass
+                log.warning("Falha ignorada em desconectar_nuvem()", exc_info=True)
         self._sync_erro = ""
         self.atualizar_nuvem()
         self.toast.mostrar("Nuvem desconectada.", "info", 4000)
@@ -385,7 +388,7 @@ class NuvemMixin:
                 if devido:
                     self.sincronizar_nuvem(manual=False)
         except Exception:
-            pass
+            log.warning("Falha ignorada em _ciclo_nuvem()", exc_info=True)
         self.after(INTERVALO_CICLO_MS, self._ciclo_nuvem)
 
     def _sincronizar_ao_fechar(self) -> None:

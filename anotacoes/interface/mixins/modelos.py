@@ -8,12 +8,15 @@ Requer em App: self.prefs, self.txt_desc, self.toast, self._texto, self._atualiz
 self._frm_modelos (criado em _montar_formulario).
 """
 
+import logging
 import customtkinter as ctk
 
 from anotacoes import theme as T
 from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
 from anotacoes.nucleo import modelos as regras
 from anotacoes.nucleo.database import MAX_DESCRICAO
+
+log = logging.getLogger(__name__)
 
 POR_LINHA = 4
 
@@ -174,7 +177,7 @@ class ModelosMixin:
         try:
             self.txt_desc.focus_set()
         except Exception:
-            pass
+            log.debug("Falha ignorada em _usar_modelo()", exc_info=True)
 
     def gerenciar_modelos(self) -> None:
         DialogoModelos(self, self.prefs.modelos_descricao, self._salvar_modelos)

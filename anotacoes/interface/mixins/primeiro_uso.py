@@ -5,6 +5,7 @@ Assistente de boas-vindas, mostrado uma vez em instalação nova: começar do ze
 nuvem (já uso em outro computador) ou restaurar um backup. Regras em nucleo/primeiro_uso.py.
 """
 
+import logging
 import os
 
 import customtkinter as ctk
@@ -12,6 +13,8 @@ import customtkinter as ctk
 from anotacoes import theme as T
 from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
 from anotacoes.nucleo import primeiro_uso as regras
+
+log = logging.getLogger(__name__)
 
 
 class DialogoBoasVindas(ctk.CTkToplevel):
@@ -85,6 +88,7 @@ class PrimeiroUsoMixin:
         try:
             total = len(self.db.listar())
         except Exception:
+            log.warning("Falha ao contar registros no primeiro uso", exc_info=True)
             return
         if not regras.deve_mostrar(False, total, self.nuvem_conectada(), self.seguranca.ativa):
             self._concluir_primeiro_uso()          # instalação já em uso: nunca mostrar
