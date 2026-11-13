@@ -1,0 +1,124 @@
+name: Publicar versão (.exe)
+
+# Só gera e publica o .exe quando você cria uma tag de versão (ex.: v2.13.0 ou 2.13.0).
+# Também pode ser rodado à mão (aba Actions > Run workflow): gera o .exe como arquivo de
+# download do próprio Actions, SEM criar Release.
+# Todos os testes abaixo são OBRIGATÓRIOS: se algum falhar, nada é publicado.
+on:
+  push:
+    tags: ["v*", "[0-9]*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # necessário para publicar a versão (Release)
+
+jobs:
+  testes:
+    uses: ./.github/workflows/ci.yml
+
+  publicar:
+    needs: testes
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      # Ao publicar a tag v2.9.0 (ou 2.9.0), a versão exibida no programa vira 2.9.0 automaticamente.
+      - name: Ajustar a versão do programa pela tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          $versao = "${{ github.ref_name }}".TrimStart("v")
+          (Get-Content anotacoes/theme.py -Encoding UTF8) -replace '^VERSAO = ".*"', "VERSAO = `"$versao`"" | Set-Content anotacoes/theme.py -Encoding UTF8
+          Select-String -Path anotacoes/theme.py -Pattern '^VERSAO'
+
+      - name: Instalar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Gerar o executável com PyInstaller
+        run: |
+          $opcoes = @(
+            "--noconfirm", "--clean", "--onefile", "--windowed",
+            "--name", "Anotacoes",
+            "--collect-all", "customtkinter",
+            "--hidden-import", "cryptography.hazmat.primitives.ciphers.aead",
+            "--hidden-import", "PIL._tkinter_finder"
+          )
+          if (Test-Path "assets/icone.ico") { $opcoes += @("--icon", "assets/icone.ico", "--add-data", "assets/icone.ico;.") }
+          if (Test-Path "assets/logo.png")  { $opcoes += @("--add-data", "assets/logo.png;.") }
+          python -m PyInstaller @opcoes main.py
+          if (-not (Test-Path "dist\Anotacoes.exe")) { throw "O .exe não foi gerado." }
+          # Cópia com o nome antigo: os programas instalados até a v2.11.x procuram por ele
+          # ao se atualizar. Pode ser removida quando todos estiverem na versão nova.
+          Copy-Item "dist\Anotacoes.exe" "dist\AnotacoesHospitalares.exe"
+
+      # Abre o programa por alguns segundos para ver se ele fecha sozinho
+      # (sintoma de arquivos faltando no pacote). OBRIGATÓRIO: falhou, não publica.
+      - name: Testar se o executável abre
+        run: |
+          $p = Start-Process -FilePath "dist\Anotacoes.exe" -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { throw "O executável fechou sozinho (código $($p.ExitCode))." }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "O executável abriu e permaneceu em execução."
+
+      # Instalador (atalhos na Área de Trabalho e no Menu Iniciar, desinstalador). Usa o Inno Setup
+      # do próprio runner; se não houver, tenta instalar. Não bloqueia a entrega do .exe solto.
+      - name: Gerar o instalador (Inno Setup)
+        continue-on-error: true
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup não encontrado." }
+          $versao = "0.0.0"
+          if ("${{ github.ref }}".StartsWith("refs/tags/")) { $versao = "${{ github.ref_name }}".TrimStart("v") }
+          & $iscc "/DAppVersao=$versao" "installer\anotacoes.iss"
+          if (-not (Test-Path "dist\Anotacoes-Instalador.exe")) { throw "O instalador não foi gerado." }
+
+      - name: Calcular a assinatura SHA-256 (para auditoria da TI)
+        run: |
+          $hash = (Get-FileHash "dist\Anotacoes.exe" -Algorithm SHA256).Hash
+          # Os dois arquivos são idênticos, então têm o mesmo SHA-256.
+          @("$hash  Anotacoes.exe", "$hash  AnotacoesHospitalares.exe") | Out-File -Encoding ascii "dist\SHA256.txt"
+          if (Test-Path "dist\Anotacoes-Instalador.exe") {
+            $h2 = (Get-FileHash "dist\Anotacoes-Instalador.exe" -Algorithm SHA256).Hash
+            "$h2  Anotacoes-Instalador.exe" | Out-File -Encoding ascii -Append "dist\SHA256-instalador.txt"
+          }
+          Write-Host "SHA-256: $hash"
+
+      - name: Guardar o executável (download na aba Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Anotacoes-windows
+          path: |
+            dist/Anotacoes.exe
+            dist/AnotacoesHospitalares.exe
+            dist/Anotacoes-Instalador.exe
+            dist/SHA256.txt
+            dist/SHA256-instalador.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      # Só em tags: publica o .exe e a assinatura numa Release.
+      # É daí que o programa instalado busca as atualizações.
+      - name: Publicar a versão (Release)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Anotacoes.exe
+            dist/AnotacoesHospitalares.exe
+            dist/Anotacoes-Instalador.exe
+            dist/SHA256.txt
+            dist/SHA256-instalador.txt
+          generate_release_notes: true
