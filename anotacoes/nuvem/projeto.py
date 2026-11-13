@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 from anotacoes.nuvem.cliente import normalizar_url, validar_chave
 
 URL_PROJETO = "https://ojoenkaehillwxgiffhf.supabase.co"
-CHAVE_PUBLICA = "sb_publishable_CKVkrUUdR1DoUKbuobnlPA_QJCFn-EM"
+CHAVE_PUBLICA = ""
 
 
 def projeto_fixo(url: str = URL_PROJETO, chave: str = CHAVE_PUBLICA) -> Optional[Tuple[str, str]]:
