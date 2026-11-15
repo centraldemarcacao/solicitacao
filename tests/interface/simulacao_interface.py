@@ -11,6 +11,13 @@ import sys
 import tempfile
 import types
 
+# No Windows o console usa cp1252 e não imprime caracteres como "▲": força UTF-8 na saída.
+for _fluxo in (sys.stdout, sys.stderr):
+    try:
+        _fluxo.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ----------------------------------------------------------------------
