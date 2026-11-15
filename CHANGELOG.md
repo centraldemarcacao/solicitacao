@@ -12,6 +12,15 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
   informado). O arquivo danificado fica guardado ao lado (`.corrompido-AAAA-MM-DD_HHMMSS`).
 * **Registro de falhas com rotação**: `erros.log` passa a ter no máximo 512 KB (mais 3 cópias antigas) e
   recebe também as falhas que antes eram ignoradas em silêncio.
+* **Menus suspensos redesenhados** (clique direito na tabela e botão Exportar): cartão com borda fina, ícones,
+  dica do atalho de teclado à direita (Enter, F2, Del, Ctrl+E, Ctrl+P), cabeçalho com a quantidade de registros
+  selecionados, destaque suave ao passar o mouse e **Excluir em vermelho**. Acompanham o tema claro/escuro e
+  funcionam pelo teclado (setas, Enter e Esc). Antes era o menu cinza nativo do Windows.
+* **Usuários da nuvem sem abrir o painel**: `scripts/usuarios_nuvem.py` cria usuários (já confirmados), lista e
+  troca senhas usando a chave **secreta** (variável `SUPABASE_SERVICE_KEY`, nunca no repositório), inclusive com o
+  cadastro aberto desligado no Supabase. Senha forte gerada com `--gerar-senha`.
+* **Botão "Criar conta" (desligado por padrão)** na página Nuvem (`PERMITIR_CADASTRO` em `projeto.py`), com senha
+  mínima de 8 caracteres e mensagens claras quando o cadastro está fechado, o e-mail já existe ou precisa ser confirmado.
 * **Projeto Supabase fixo** preenchido em `anotacoes/nuvem/projeto.py` (a página Nuvem pede só e-mail e senha).
 * **Release automática a cada push em `main`**: `release.yml` roda os testes (`ci.yml`: Python 3.10, 3.12 e
   3.13, simulação da interface e Tk real), gera o `.exe` e o instalador e publica a Release `2.13.N` sozinho.

@@ -14,7 +14,8 @@ entregue como um único `.exe` que se atualiza sozinho.
 * **Lixeira** (30 dias) e **Backup** automático/manual com restauração.
 * **Banco protegido**: modo WAL e checagem de integridade ao abrir; se o arquivo estiver danificado, o programa oferece restaurar o último backup íntegro (o arquivo ruim é guardado, não apagado).
 * **Desfazer** (Ctrl+Z), atalhos de teclado (F1 mostra todos) e tema claro/escuro.
-* **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline.
+* **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline. O administrador cria e troca senhas
+  de usuários sem abrir o painel (`scripts/usuarios_nuvem.py`; veja `docs/nuvem-supabase.md`).
 * **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); horários editáveis e liga/desliga no sino do menu (Ctrl + L).
 * **Segurança (opcional)**: PIN/senha, bloqueio por inatividade (Ctrl + B bloqueia na hora) e backups criptografados (AES-256). Veja `docs/seguranca.md`.
 * **Iniciar com o Windows**, minimizado, para os alertas de pausa não dependerem de abrir o programa.
@@ -49,7 +50,8 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   ├── registro_log.py    #     erros.log com rotação
 │   │   └── identidade.py      #     nome, subtítulo, logo e ícone
 │   ├── nuvem/                 #   Supabase (sem interface)
-│   │   ├── cliente.py         #     login e API REST
+│   │   ├── cliente.py         #     login, cadastro e API REST
+│   │   ├── admin.py           #     administração de usuários (chave secreta; só em linha de comando)
 │   │   ├── sincronizacao.py   #     motor de sincronização
 │   │   └── sql.py             #     SQL de configuração
 │   ├── atualizacao/
@@ -63,6 +65,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 ├── supabase/setup.sql         # tabela e regras de segurança da nuvem
 ├── installer/anotacoes.iss    # script do instalador (Inno Setup, usado pelo Actions)
 ├── scripts/build.bat          # gera o .exe no seu computador
+├── scripts/usuarios_nuvem.py  # administrador: criar/listar/trocar senha de usuários da nuvem
 ├── docs/                      # guias (segurança, arquitetura, publicar versão, nuvem, personalizar)
 ├── .github/workflows/         # ci.yml (testes) e release.yml (testa, gera o .exe e publica a Release a cada push em main)
 ├── .github/dependabot.yml     # atualizações das dependências fixadas

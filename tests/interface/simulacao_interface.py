@@ -1349,6 +1349,60 @@ for _ in range(200):
 check(usados.get("url") == "https://abc.supabase.co" and usados.get("email") == "maria@solicitacao.local",
       "projeto fixo: conecta com o endereço do arquivo e o e-mail digitado")
 nuvem_gui.ClienteSupabase, nuvem_gui.testar_conexao = _orig_cli, _orig_tc
+# "Criar conta": desligado por padrão; ligado só por projeto.PERMITIR_CADASTRO
+check(_projeto_mod.PERMITIR_CADASTRO is False and app2.btn_nuvem_criar is None,
+      "criar conta: botão desligado por padrão")
+_projeto_mod.PERMITIR_CADASTRO = True
+_projeto_mod.projeto_fixo = lambda *a, **k: ("https://abc.supabase.co", "sb_publishable_" + "A" * 24)
+app3 = gui.App()
+check(app3.btn_nuvem_criar is not None and app3.btn_nuvem_criar.cget("text") == "Criar conta",
+      "criar conta: botão aparece quando liberado no projeto.py")
+eventos = {}
+class _FalsoCadastro:
+    resultado = "conectado"; erro = None
+    refresh_token = "r-novo"
+    def __init__(self, url, chave, *a, **k): pass
+    def cadastrar(self, e, s):
+        eventos["cadastro"] = (e, s)
+        if _FalsoCadastro.erro: raise _nuvem.NuvemErro(_FalsoCadastro.erro)
+        return _FalsoCadastro.resultado
+_orig_cli2, _orig_tc2, _orig_sinc2 = nuvem_gui.ClienteSupabase, nuvem_gui.testar_conexao, nuvem_gui.sincronizar
+nuvem_gui.ClienteSupabase = _FalsoCadastro
+nuvem_gui.testar_conexao = lambda c: None
+def esperar(a):
+    for _ in range(200):
+        if not a._sync_fila.empty():
+            a._sondar_sync(); return True
+        _time.sleep(0.01)
+    return False
+app3.ent_nuvem_email.delete(0, "end"); app3.ent_nuvem_email.insert(0, "nova@solicitacao.local")
+app3.ent_nuvem_senha.delete(0, "end"); app3.ent_nuvem_senha.insert(0, "curta")
+app3.criar_conta_nuvem()
+check("cadastro" not in eventos and "pelo menos 8" in app3.toast._rotulo.cget("text"),
+      "criar conta: senha curta é recusada sem chamar a rede")
+app3.ent_nuvem_senha.delete(0, "end"); app3.ent_nuvem_senha.insert(0, "SenhaForte123")
+RESP["v"] = False
+app3.criar_conta_nuvem()
+check("cadastro" not in eventos and not app3._sync_rodando, "criar conta: cancelar na confirmação não cadastra")
+RESP["v"] = True
+_FalsoCadastro.erro = "O cadastro de novas contas está desativado neste projeto. Peça ao administrador."
+app3.criar_conta_nuvem()
+check(esperar(app3) and "desativado" in app3.toast._rotulo.cget("text") and not app3.nuvem_conectada(),
+      "criar conta: cadastro fechado no Supabase mostra o motivo e não conecta")
+_FalsoCadastro.erro = None; _FalsoCadastro.resultado = "confirmar_email"
+app3.criar_conta_nuvem()
+check(esperar(app3) and "Confirme o e-mail" in app3.toast._rotulo.cget("text") and not app3.nuvem_conectada(),
+      "criar conta: exigindo confirmação de e-mail, avisa e não conecta")
+_FalsoCadastro.resultado = "conectado"
+nuvem_gui.sincronizar = lambda db, c: Resultado(enviados=0, recebidos=0)
+app3.criar_conta_nuvem()
+check(esperar(app3) and eventos["cadastro"] == ("nova@solicitacao.local", "SenhaForte123")
+      and app3._nuvem_cfg.get("email") == "nova@solicitacao.local",
+      "criar conta: conta criada já conecta e guarda o e-mail (a senha não é guardada)")
+nuvem_gui.ClienteSupabase, nuvem_gui.testar_conexao, nuvem_gui.sincronizar = _orig_cli2, _orig_tc2, _orig_sinc2
+RESP["v"] = True
+_projeto_mod.PERMITIR_CADASTRO = False
+
 _projeto_mod.projeto_fixo = _orig_fixo
 
 print(f"\n{ok} verificações passaram.")

@@ -21,8 +21,10 @@ depois.
 1. Crie um projeto no [Supabase](https://supabase.com) (de preferência na região São Paulo).
 2. **SQL Editor > New query**: cole o conteúdo de [`supabase/setup.sql`](../supabase/setup.sql)
    (ou use o botão **Copiar SQL de configuração** da página Nuvem) e clique em **Run**.
-3. **Authentication > Users > Add user > Create new user**: e-mail e senha, marcando
-   **Auto Confirm User**. Use um usuário só para este programa.
+3. Crie o usuário do programa: pelo painel (**Authentication > Users > Add user > Create new user**,
+   marcando **Auto Confirm User**) ou, sem abrir o painel, pelo script de administrador
+   (veja [Criar usuários sem abrir o painel](#criar-usuários-sem-abrir-o-painel)). Use um usuário
+   só para este programa.
 4. **Project URL**: na página inicial do projeto (botão **Copy** ao lado do nome) ou em
    *Settings > Data API*.
 5. **Chave**: *Settings > API Keys > Publishable key* (`sb_publishable_...`).
@@ -62,3 +64,43 @@ Nuvem mostra só **e-mail e senha**.
 * A chave pública foi feita para ficar no programa; a proteção vem do login e das regras do banco
   (`supabase/setup.sql`). Se o repositório for público, isso continua seguro, desde que o SQL tenha
   sido executado e o cadastro aberto esteja desligado.
+
+## Criar usuários sem abrir o painel
+Para o **administrador** criar, listar ou trocar a senha de usuários direto do projeto, sem entrar
+no Supabase:
+
+```
+python scripts/usuarios_nuvem.py listar
+python scripts/usuarios_nuvem.py criar medico@hospital.org --gerar-senha
+python scripts/usuarios_nuvem.py senha medico@hospital.org
+```
+
+* O script usa a chave **secreta** do projeto (*Project Settings > API Keys > Secret key*, ou a
+  `service_role`). Informe-a na variável de ambiente `SUPABASE_SERVICE_KEY` (no PowerShell:
+  `$env:SUPABASE_SERVICE_KEY = "sb_secret_..."`) ou digite quando o script pedir (não aparece na tela).
+  Se a variável `SUPABASE_URL` (ou `--url`) não existir, usa o endereço de `anotacoes/nuvem/projeto.py`.
+* **Essa chave nunca vai para o programa, o repositório ou o GitHub.** Ela dá controle total do projeto.
+  O script recusa a chave pública para você não se confundir.
+* `--gerar-senha` cria uma senha forte e a mostra **uma única vez**; sem ele, o script pede a senha duas
+  vezes. A senha digitada nunca é exibida.
+* O usuário nasce já confirmado e funciona **mesmo com o cadastro aberto desligado** (recomendado:
+  *Authentication > Sign In / Providers > Allow new users to sign up = desligado*), então ninguém de
+  fora consegue criar conta.
+* Cada conta vê só os próprios registros. Para dois computadores compartilharem o histórico, entre nos
+  dois com o **mesmo** e-mail e senha.
+* Remover um usuário continua sendo feito no painel (*Authentication > Users*), porque apaga também os
+  registros dele na nuvem.
+
+### Botão "Criar conta" (desligado por padrão)
+A página Nuvem pode mostrar um botão **Criar conta** (cria a conta com o e-mail e a senha digitados,
+mínimo de 8 caracteres). Ele vem **desligado**: `PERMITIR_CADASTRO = False` em
+`anotacoes/nuvem/projeto.py`.
+
+* Esse arquivo é público, então ligar o botão **não abre** nada por si só: quem decide se alguém pode
+  se cadastrar é o Supabase (*Allow new users to sign up*). Com o cadastro fechado, o botão responde
+  "o cadastro de novas contas está desativado".
+* Uso pontual: ligue o cadastro no Supabase, ligue `PERMITIR_CADASTRO`, deixe as pessoas criarem as contas
+  e **desfaça os dois**. Se o Supabase exigir confirmação de e-mail, a pessoa confirma o e-mail e depois
+  clica em *Conectar*.
+* Para a maioria dos casos, prefira o script de administrador: nada fica aberto para terceiros.
+

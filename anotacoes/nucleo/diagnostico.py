@@ -7,7 +7,6 @@ dizem O QUE fazer. Sem interface (veja interface/mixins/configuracoes.py).
 Nada daqui envia ou mostra dados de pacientes.
 """
 
-import json
 import os
 import platform
 import socket

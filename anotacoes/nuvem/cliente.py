@@ -23,6 +23,7 @@ from typing import Callable, Optional
 from anotacoes.nucleo.certificados import MENSAGEM_CERTIFICADO, contexto_ssl, erro_de_certificado
 
 TIMEOUT_PADRAO = 20
+MIN_SENHA = 8        # tamanho mínimo da senha de contas novas (o Supabase exige 6 por padrão)
 
 
 class NuvemErro(Exception):
@@ -77,6 +78,13 @@ def validar_email(email: str) -> str:
     if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
         raise ValueError("Informe um e-mail válido.")
     return email
+
+
+def validar_senha(senha: str) -> Optional[str]:
+    """None se a senha serve para uma conta nova; senão, a mensagem de erro."""
+    if not senha or len(senha) < MIN_SENHA:
+        return f"Use uma senha com pelo menos {MIN_SENHA} caracteres."
+    return None
 
 
 # ----------------------------------------------------------------------
@@ -149,6 +157,22 @@ class ClienteSupabase:
                               {"email": email, "password": senha})
         self._guardar_sessao(resposta)
 
+    def cadastrar(self, email: str, senha: str) -> str:
+        """Cria uma conta nova (só funciona se o cadastro estiver liberado no Supabase).
+
+        Retorna "conectado" (conta criada e já com sessão) ou "confirmar_email" (conta criada,
+        mas o Supabase exige confirmar o e-mail antes do primeiro login).
+        """
+        email = validar_email(email)
+        erro = validar_senha(senha)
+        if erro:
+            raise NuvemErro(erro)
+        resposta = self._http("POST", "/auth/v1/signup", {"email": email, "password": senha})
+        if isinstance(resposta, dict) and resposta.get("access_token"):
+            self._guardar_sessao(resposta)
+            return "conectado"
+        return "confirmar_email"
+
     def _token_valido(self) -> str:
         if self._acesso and time.time() < self._expira:
             return self._acesso
@@ -190,6 +214,16 @@ def _erro_http(codigo: int, detalhe: dict) -> NuvemErro:
             codigo == 404 and "relation" in texto):
         return NuvemErro("A tabela da nuvem ainda não existe. Copie o script SQL "
                          "(botão “Copiar SQL”) e execute no SQL Editor do Supabase.")
+    if cod == "signup_disabled" or "signups not allowed" in texto or "signup is disabled" in texto:
+        return NuvemErro("O cadastro de novas contas está desativado neste projeto. "
+                         "Peça ao administrador para criar o seu usuário.")
+    if cod in ("user_already_exists", "email_exists") or "already registered" in texto \
+            or "already been registered" in texto:
+        return NuvemErro("Já existe uma conta com este e-mail. Use “Conectar” (ou peça ao "
+                         "administrador para trocar a senha).")
+    if cod == "weak_password" or "password should be at least" in texto:
+        return NuvemErro(f"Senha fraca. Use pelo menos {MIN_SENHA} caracteres, misturando "
+                         "letras e números.")
     if "invalid login" in texto or "invalid_credentials" in texto:
         return NuvemErro("E-mail ou senha incorretos.")
     if "email not confirmed" in texto:

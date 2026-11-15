@@ -91,6 +91,42 @@ def main() -> int:
     horarios.destroy()
     passo("janela de horários abre e fecha")
 
+    # Menus suspensos (clique direito e Exportar) com o Tk real
+    from anotacoes.interface.widgets import MenuPopup
+    app.db.inserir("Paciente Teste", "1234", "Solicita água.")
+    app.atualizar_tudo()
+    app.mostrar_pagina("historico")
+    processar(app)
+    arvore = app.tabela.tree
+    iid = arvore.get_children()[0]
+    arvore.selection_set(iid)
+    x0, y0 = arvore.winfo_rootx() + 40, arvore.winfo_rooty() + 40
+    menu = MenuPopup.abrir(app, x0, y0, app._itens_menu_contexto(),
+                           titulo="1 registro selecionado")
+    processar(app, 5)
+    assert menu.winfo_exists() and menu.winfo_ismapped(), "menu de contexto não apareceu"
+    assert menu.winfo_width() > 150 and menu.winfo_height() > 100, "menu de contexto sem tamanho"
+    menu._destacar(0)
+    menu._mover(1)
+    processar(app)
+    assert menu._atual == 1
+    passo("menu de contexto abre, destaca e navega")
+    menu._fechar()
+    processar(app)
+    assert not menu.winfo_exists(), "menu de contexto não fechou"
+    passo("menu de contexto fecha")
+
+    app._abrir_menu_exportar()
+    processar(app, 5)
+    menu = app._menu_popup
+    assert menu is not None and menu.winfo_ismapped(), "menu Exportar não apareceu"
+    for tecla in ("<Escape>", "<Up>", "<Down>", "<Return>"):
+        assert menu.bind(tecla), f"menu sem atalho de teclado {tecla}"   # o foco real depende do Windows
+    menu._fechar()
+    processar(app, 5)
+    assert app._menu_popup is None and not menu.winfo_exists(), "menu Exportar não fechou"
+    passo("menu Exportar abre, tem teclado e fecha")
+
     # PIN e bloqueio
     assert app.seguranca.ativar("senha-teste-1", criptografar_backups=False)
     app.bloquear()

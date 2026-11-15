@@ -23,8 +23,8 @@ import customtkinter as ctk
 from anotacoes import theme as T
 from anotacoes.interface.icons import icone
 from anotacoes.nuvem import projeto
-from anotacoes.nuvem.cliente import (ClienteSupabase, NuvemErro, normalizar_url, validar_chave,
-                   validar_email)
+from anotacoes.nuvem.cliente import (MIN_SENHA, ClienteSupabase, NuvemErro, normalizar_url,
+                                     validar_chave, validar_email, validar_senha)
 from anotacoes.nuvem.sql import SQL_CONFIGURACAO
 from anotacoes.nucleo.preferencias import Preferencias
 from anotacoes.nuvem.sincronizacao import sincronizar, testar_conexao
@@ -141,6 +141,16 @@ class NuvemMixin:
             font=fonte(13, "bold"), fg_color=T.TEAL, hover_color=T.TEAL_ESCURO,
             text_color=T.SOBRE_COR, command=self.conectar_nuvem)
         self.btn_nuvem_conectar.pack(side="left")
+        # "Criar conta": desligado por padrão (projeto.PERMITIR_CADASTRO). O cadastro de terceiros
+        # é barrado pelo Supabase; o administrador cria usuários com scripts/usuarios_nuvem.py.
+        self.btn_nuvem_criar = None
+        if projeto.PERMITIR_CADASTRO:
+            self.btn_nuvem_criar = ctk.CTkButton(
+                botoes, text="Criar conta", width=150, height=40, corner_radius=10,
+                font=fonte(13, "bold"), fg_color="transparent", text_color=T.TEAL,
+                border_width=2, border_color=T.TEAL, hover_color=T.TEAL_CLARO,
+                command=self.criar_conta_nuvem)
+            self.btn_nuvem_criar.pack(side="left", padx=(10, 0))
         if self._projeto_fixo is None:
             ctk.CTkButton(
                 botoes, text="Copiar SQL de configuração", width=230, height=40,
@@ -151,8 +161,12 @@ class NuvemMixin:
         ctk.CTkLabel(
             self._grp_nuvem_entrar, font=fonte(12), text_color=T.TEXTO_SUAVE,
             anchor="w", wraplength=780,
-            text=("Use o e-mail e a senha que você recebeu. Os mesmos dados funcionam em "
-                  "qualquer computador." if self._projeto_fixo else
+            text=(("Use o e-mail e a senha que você recebeu. Os mesmos dados funcionam em "
+                   "qualquer computador."
+                   + (f"  “Criar conta” só funciona se o administrador liberou novos cadastros "
+                      f"(senha com pelo menos {MIN_SENHA} caracteres); cada conta vê só os "
+                      "próprios registros." if self.btn_nuvem_criar else ""))
+                  if self._projeto_fixo else
                   "Primeira vez? 1) No Supabase, abra “SQL Editor”, cole o SQL copiado aqui e "
                   "clique em Run.  2) Em “Authentication > Users”, crie um usuário com e-mail "
                   "e senha (marque Auto Confirm User).  3) Em “Project Settings > API”, copie "
@@ -221,6 +235,8 @@ class NuvemMixin:
             self.lbl_nuvem_detalhe.configure(text=detalhe)
             ocupado = "disabled" if self._sync_rodando else "normal"
             self.btn_nuvem_conectar.configure(state=ocupado)
+            if self.btn_nuvem_criar is not None:
+                self.btn_nuvem_criar.configure(state=ocupado)
             self.btn_nuvem_sincronizar.configure(state=ocupado)
         except Exception:
             pass  # a página pode estar sendo recriada (troca de tema)
@@ -261,6 +277,54 @@ class NuvemMixin:
                 cliente.entrar(email, senha)
                 testar_conexao(cliente)
                 self._sync_fila.put(("conectado", True, (url, chave, email, cliente.refresh_token)))
+            except NuvemErro as exc:
+                self._sync_fila.put(("falha_conexao", True, str(exc)))
+            except Exception as exc:
+                self._sync_fila.put(("falha_conexao", True, f"Erro inesperado: {exc}"))
+
+        threading.Thread(target=tarefa, daemon=True).start()
+        self.after(300, self._sondar_sync)
+
+    def criar_conta_nuvem(self) -> None:
+        """Cria uma conta nova com o e-mail e a senha digitados (se o Supabase permitir)."""
+        if self._sync_rodando:
+            return
+        try:
+            if self._projeto_fixo:
+                url, chave = self._projeto_fixo
+            else:
+                url = normalizar_url(self.ent_nuvem_url.get())
+                chave = validar_chave(self.ent_nuvem_chave.get())
+            email = validar_email(self.ent_nuvem_email.get())
+        except ValueError as exc:
+            self.toast.mostrar(str(exc), "erro", 6000)
+            return
+        senha = self.ent_nuvem_senha.get()
+        erro = validar_senha(senha)
+        if erro:
+            self.toast.mostrar(erro, "erro", 6000)
+            return
+        if not DialogoConfirmacao.perguntar(
+                self, "Criar conta na nuvem?", email,
+                "Será criada uma conta nova com este e-mail e esta senha. Cada conta vê só os "
+                "próprios registros: para usar os mesmos dados em outro computador, entre lá "
+                "com este mesmo e-mail e senha. Guarde a senha: ela não fica salva.",
+                "Criar conta", nome_icone="cloud", cor=T.TEAL, cor_hover=T.TEAL_ESCURO,
+                cor_clara=T.TEAL_CLARO):
+            return
+        self._sync_rodando = True
+        self._sync_erro = ""
+        self.atualizar_nuvem()
+
+        def tarefa():
+            try:
+                cliente = ClienteSupabase(url, chave)
+                if cliente.cadastrar(email, senha) == "conectado":
+                    testar_conexao(cliente)
+                    self._sync_fila.put(
+                        ("conectado", True, (url, chave, email, cliente.refresh_token)))
+                else:
+                    self._sync_fila.put(("conta_criada", True, email))
             except NuvemErro as exc:
                 self._sync_fila.put(("falha_conexao", True, str(exc)))
             except Exception as exc:
@@ -328,6 +392,13 @@ class NuvemMixin:
             self.ent_nuvem_senha.delete(0, "end")
             self.toast.mostrar("Conectado! Enviando seus registros...", "sucesso", 4000)
             self.sincronizar_nuvem(manual=True)
+            return
+
+        if tipo == "conta_criada":
+            self.atualizar_nuvem()
+            self.toast.mostrar(
+                f"Conta criada. Confirme o e-mail enviado para {dado} e depois clique em "
+                "“Conectar e sincronizar”.", "info", 10000)
             return
 
         if tipo == "falha_conexao":
