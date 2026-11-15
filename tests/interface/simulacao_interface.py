@@ -493,9 +493,15 @@ check(len(linhas) == 2 and linhas[1][2] == "Atrasada", "com seleção, exporta s
 import webbrowser
 abertos = []
 webbrowser.open = lambda u: abertos.append(u)
+# No Windows o programa usa os.startfile (não o webbrowser): captura os dois caminhos.
+_startfile_orig = getattr(os, "startfile", None)
+if _startfile_orig is not None:
+    os.startfile = lambda caminho: abertos.append("file://" + caminho)
 app.db.inserir("<script>alert(1)</script>", "", "x")
 app.atualizar_tudo(); tr.selection_set(()); app.tabela._selecionou()
 app.imprimir_lista()
+if _startfile_orig is not None:
+    os.startfile = _startfile_orig
 html_txt = open(abertos[0].replace("file://", ""), encoding="utf-8").read()
 check("<script>alert(1)</script>" not in html_txt and "&lt;script&gt;" in html_txt, "impressão escapa HTML dos dados")
 check("window.print()" in html_txt and "Liga Contra o Câncer" in html_txt, "página de impressão abre a caixa de impressão")
