@@ -1,10 +1,8 @@
 name: Testes (CI)
 
-# Roda a cada envio para main, em pull requests e quando chamado pela publicação (release.yml).
-# NÃO gera nem publica o .exe: isso é feito só em tags (veja release.yml).
+# Roda em pull requests, à mão e quando chamado pela publicação (release.yml), que por sua vez
+# roda a cada push em main. NÃO gera nem publica o .exe (isso é do release.yml).
 on:
-  push:
-    branches: [main, master]
   pull_request:
   workflow_call:
   workflow_dispatch:
