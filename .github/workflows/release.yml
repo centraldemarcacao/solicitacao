@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Baixar o código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Decide a versão: a da tag (se foi uma tag) ou VERSAO_BASE.<número da execução>.
       # O número da execução só cresce, então toda versão nova é maior que a anterior
