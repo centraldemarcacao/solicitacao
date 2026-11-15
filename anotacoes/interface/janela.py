@@ -42,8 +42,11 @@ from anotacoes.interface.widgets import (
     CaixaBusca,
     CartaoNumero,
     DialogoConfirmacao,
+    ItemMenu,
     ItemNavegacao,
+    MenuPopup,
     Notificacao,
+    SEPARADOR,
     Pilula,
     TabelaRegistros,
     alinhar_esquerda,
@@ -1197,20 +1200,19 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         arvore.bind("<Delete>", lambda _e: self.excluir_selecionados())
         arvore.bind("<Button-3>", self._abrir_menu_contexto)
 
-        self.menu_contexto = tk.Menu(self, tearoff=0, font=(T.FONTE, 11))
-        self.menu_contexto.add_command(label="Ver detalhes", command=self.ver_detalhes)
-        self.menu_contexto.add_command(label="Editar", command=self.editar_registro)
-        self.menu_contexto.add_separator()
-        self.menu_contexto.add_command(
-            label="Marcar como atendida",
-            command=lambda: self.alterar_status(STATUS_ATENDIDA),
-        )
-        self.menu_contexto.add_command(
-            label="Marcar como pendente",
-            command=lambda: self.alterar_status(STATUS_PENDENTE),
-        )
-        self.menu_contexto.add_separator()
-        self.menu_contexto.add_command(label="Excluir", command=self.excluir_selecionados)
+    def _itens_menu_contexto(self) -> list:
+        """Opções do clique direito na tabela (montadas a cada abertura: seguem o tema)."""
+        return [
+            ItemMenu("Ver detalhes", self.ver_detalhes, "eye", "Enter"),
+            ItemMenu("Editar", self.editar_registro, "edit", "F2"),
+            SEPARADOR,
+            ItemMenu("Marcar como atendida",
+                     lambda: self.alterar_status(STATUS_ATENDIDA), "check_circle"),
+            ItemMenu("Marcar como pendente",
+                     lambda: self.alterar_status(STATUS_PENDENTE), "clock"),
+            SEPARADOR,
+            ItemMenu("Excluir", self.excluir_selecionados, "trash", "Del", perigo=True),
+        ]
 
     # --- Atualização da tabela e indicadores ---------------------------
     @staticmethod
@@ -1301,15 +1303,14 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self._atualizar_rodape()
 
     def _abrir_menu_exportar(self) -> None:
-        menu = tk.Menu(self, tearoff=0, font=(T.FONTE, 11))
-        menu.add_command(label="Exportar para Excel (CSV)...", command=self.exportar_csv)
-        menu.add_command(label="Imprimir lista...", command=self.imprimir_lista)
-        x = self.btn_exportar.winfo_rootx()
-        y = self.btn_exportar.winfo_rooty() + self.btn_exportar.winfo_height()
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
+        itens = [
+            ItemMenu("Exportar para Excel (CSV)", self.exportar_csv, "download", "Ctrl+E"),
+            ItemMenu("Imprimir lista", self.imprimir_lista, "clipboard", "Ctrl+P"),
+        ]
+        # abre logo abaixo do botão, com a borda direita alinhada à dele
+        x = self.btn_exportar.winfo_rootx() + self.btn_exportar.winfo_width()
+        y = self.btn_exportar.winfo_rooty() + self.btn_exportar.winfo_height() + 4
+        MenuPopup.abrir(self, x, y, itens, largura=250, ancora="dir")
 
     def _atualizar_rodape(self) -> None:
         texto = plural(self._total_exibido, "registro exibido", "registros exibidos")
@@ -1401,10 +1402,10 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             return
         if iid not in arvore.selection():
             arvore.selection_set(iid)
-        try:
-            self.menu_contexto.tk_popup(evento.x_root, evento.y_root)
-        finally:
-            self.menu_contexto.grab_release()
+        total = len(arvore.selection())
+        MenuPopup.abrir(
+            self, evento.x_root, evento.y_root, self._itens_menu_contexto(),
+            titulo=plural(total, "registro selecionado", "registros selecionados"))
 
     @staticmethod
     def _texto_retorno(reg: dict) -> str:

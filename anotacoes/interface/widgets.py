@@ -10,10 +10,14 @@ Componentes visuais reutilizáveis (CustomTkinter):
   - Notificacao         aviso temporário (sucesso, erro, atenção)
   - TabelaRegistros     tabela com cores por linha e seleção suave
   - DialogoConfirmacao  janela modal de confirmação (ex.: exclusão)
+  - MenuPopup           menu suspenso (clique direito, Exportar) com ícones e atalhos
 """
 
 import logging
+import tkinter as tk
+from dataclasses import dataclass
 from tkinter import ttk
+from typing import Callable, Optional
 
 import customtkinter as ctk
 
@@ -467,3 +471,226 @@ class DialogoConfirmacao(ctk.CTkToplevel):
         dialogo = cls(pai, titulo, destaque, mensagem, texto_confirmar, **estilo)
         pai.wait_window(dialogo)
         return dialogo.resultado
+
+
+# ----------------------------------------------------------------------
+# Menu suspenso (clique direito e botão Exportar)
+# ----------------------------------------------------------------------
+@dataclass
+class ItemMenu:
+    """Uma opção do MenuPopup. `perigo` pinta de vermelho (ex.: Excluir)."""
+    rotulo: str
+    comando: Callable
+    icone: Optional[str] = None
+    atalho: Optional[str] = None
+    perigo: bool = False
+
+
+SEPARADOR = None      # use no meio da lista de itens para desenhar uma linha divisória
+
+
+class MenuPopup(tk.Toplevel):
+    """Menu suspenso no padrão visual do sistema (substitui o menu cinza nativo do Tk).
+
+    Cartão com borda fina, ícones, dica do atalho de teclado à direita, destaque suave ao
+    passar o mouse e opção perigosa em vermelho. Também funciona pelo teclado
+    (setas, Enter e Esc) e fecha ao clicar fora. As cores são lidas ao abrir, então
+    acompanham o tema claro/escuro.
+
+    Use `MenuPopup.abrir(janela, x, y, itens, titulo=...)`. `x`, `y` são coordenadas de tela;
+    com `ancora="dir"`, `x` é a borda DIREITA do menu (útil sob um botão no canto).
+    """
+
+    LARGURA = 272
+    ALTURA_ITEM = 36          # + 2 de espaçamento vertical por item
+    MARGEM = 6
+
+    def __init__(self, pai, x: int, y: int, itens, titulo: Optional[str] = None,
+                 largura: Optional[int] = None, ancora: str = "esq") -> None:
+        super().__init__(pai, bg=T.BORDA_FORTE, highlightthickness=0)
+        self._pai = pai
+        self._fechado = False
+        self._atual: Optional[int] = None
+        self._acoes: list = []          # (linha, item) só das opções clicáveis
+        largura = largura or self.LARGURA
+        self.overrideredirect(True)
+        try:
+            self.attributes("-topmost", True)
+        except Exception:
+            log.debug("Falha ignorada em MenuPopup.__init__()", exc_info=True)
+
+        corpo = ctk.CTkFrame(self, fg_color=T.CARD, corner_radius=0)
+        corpo.pack(fill="both", expand=True, padx=1, pady=1)
+        # espaçador: define a largura do menu (e a margem de cima)
+        ctk.CTkFrame(corpo, width=largura - 2, height=self.MARGEM,
+                     fg_color="transparent", corner_radius=0).pack()
+        altura = 2 + 2 * self.MARGEM
+
+        if titulo:
+            ctk.CTkLabel(corpo, text=titulo, height=22, font=fonte(12, "bold"),
+                         text_color=T.TEXTO_SUAVE, anchor="w").pack(
+                             fill="x", padx=16, pady=(4, 2))
+            altura += 28
+            altura += self._separador(corpo)
+
+        for item in itens:
+            if item is SEPARADOR:
+                altura += self._separador(corpo)
+            else:
+                self._criar_item(corpo, item)
+                altura += self.ALTURA_ITEM + 2
+
+        ctk.CTkFrame(corpo, height=self.MARGEM, fg_color="transparent",
+                     corner_radius=0).pack(fill="x")
+
+        self._posicionar(x, y, largura, altura, ancora)
+        for tecla, acao in (("<Escape>", lambda _e: self._fechar()),
+                            ("<Up>", lambda _e: self._mover(-1)),
+                            ("<Down>", lambda _e: self._mover(1)),
+                            ("<Return>", lambda _e: self._ativar(self._atual)),
+                            ("<Button-1>", self._clique), ("<Button-3>", self._clique)):
+            self.bind(tecla, acao)
+        self.after(20, self._capturar)
+        self.after(250, lambda: self.bind(
+            "<FocusOut>", lambda _e: self.after(120, self._conferir_foco)))
+
+    # --- construção ----------------------------------------------------
+    @staticmethod
+    def _separador(corpo) -> int:
+        ctk.CTkFrame(corpo, height=1, fg_color=T.BORDA, corner_radius=0).pack(
+            fill="x", padx=12, pady=5)
+        return 11
+
+    def _criar_item(self, corpo, item: ItemMenu) -> None:
+        indice = len(self._acoes)
+        cor = T.VERMELHO if item.perigo else T.TEXTO
+        linha = ctk.CTkFrame(corpo, fg_color="transparent", corner_radius=6,
+                             height=self.ALTURA_ITEM)
+        linha.pack(fill="x", padx=self.MARGEM, pady=1)
+        linha.pack_propagate(False)
+        partes = [linha]
+        if item.icone:
+            partes.append(ctk.CTkLabel(
+                linha, text="", width=24,
+                image=icone(item.icone, T.VERMELHO if item.perigo else T.TEXTO_SUAVE, 18)))
+            partes[-1].pack(side="left", padx=(10, 8))
+        rotulo = ctk.CTkLabel(linha, text=item.rotulo, font=fonte(14), text_color=cor,
+                              anchor="w")
+        rotulo.pack(side="left", padx=(0 if item.icone else 14, 0))
+        partes.append(rotulo)
+        if item.atalho:
+            dica = ctk.CTkLabel(linha, text=item.atalho, font=fonte(12),
+                                text_color=T.TEXTO_SUAVE, anchor="e")
+            dica.pack(side="right", padx=(8, 14))
+            partes.append(dica)
+        for parte in partes:
+            parte.bind("<Enter>", lambda _e, i=indice: self._destacar(i))
+            parte.bind("<Button-1>", lambda _e, i=indice: self._ativar(i))
+        self._acoes.append((linha, item))
+
+    def _posicionar(self, x: int, y: int, largura: int, altura: int, ancora: str) -> None:
+        """Coloca o menu perto do ponto pedido, sem sair da tela (coordenadas em pixels)."""
+        try:
+            fator = float(self._pai._get_window_scaling())
+        except Exception:
+            fator = 1.0
+        w, h = int(round(largura * fator)), int(round(altura * fator))
+        try:
+            self.update_idletasks()
+            w, h = max(w, self.winfo_reqwidth()), self.winfo_reqheight()
+        except Exception:
+            log.debug("Medida real do menu indisponível; usando a estimada", exc_info=True)
+        if ancora == "dir":
+            x -= w
+        tela_w, tela_h = self.winfo_screenwidth(), self.winfo_screenheight()
+        if x + w > tela_w - 8:
+            x = tela_w - w - 8
+        if y + h > tela_h - 48:             # sem espaço embaixo (barra de tarefas): abre para cima
+            y = y - h
+        self.geometry(f"{w}x{h}+{max(8, int(x))}+{max(8, int(y))}")
+
+    # --- interação -----------------------------------------------------
+    def _capturar(self, tentativas: int = 5) -> None:
+        """Captura o mouse e o teclado. O Tk só aceita com a janela já visível: tenta de novo."""
+        if self._fechado:
+            return
+        try:
+            self.grab_set()
+            self.focus_force()
+        except Exception:
+            if tentativas > 0:
+                self.after(40, lambda: self._capturar(tentativas - 1))
+            else:
+                log.debug("Falha ignorada em MenuPopup._capturar()", exc_info=True)
+
+    def _destacar(self, indice: Optional[int]) -> None:
+        if self._fechado or indice is None or indice == self._atual:
+            return
+        if self._atual is not None:
+            self._acoes[self._atual][0].configure(fg_color="transparent")
+        self._atual = indice
+        linha, item = self._acoes[indice]
+        linha.configure(fg_color=T.VERMELHO_CLARO if item.perigo else T.SELECAO)
+
+    def _mover(self, passo: int) -> None:
+        if self._fechado or not self._acoes:
+            return
+        base = -1 if self._atual is None and passo > 0 else (0 if self._atual is None else self._atual)
+        self._destacar((base + passo) % len(self._acoes))
+
+    def _ativar(self, indice: Optional[int]) -> None:
+        if self._fechado or indice is None:
+            return
+        comando = self._acoes[indice][1].comando
+        pai = self._pai
+        self._fechar()
+        pai.after(10, comando)          # depois de fechar, para o foco voltar à janela
+
+    def _clique(self, evento) -> None:
+        """Clique fora do menu (o menu captura o mouse) fecha sem executar nada."""
+        if self._fechado:
+            return
+        try:
+            x0, y0 = self.winfo_rootx(), self.winfo_rooty()
+            dentro = (x0 <= evento.x_root < x0 + self.winfo_width()
+                      and y0 <= evento.y_root < y0 + self.winfo_height())
+        except Exception:
+            dentro = True
+        if not dentro:
+            self._fechar()
+
+    def _conferir_foco(self) -> None:
+        if self._fechado:
+            return
+        try:
+            foco = self.focus_get()
+        except Exception:       # o Tk levanta KeyError com certas listas suspensas
+            foco = None
+        if foco is None:
+            self._fechar()
+
+    def _fechar(self) -> None:
+        if self._fechado:
+            return
+        self._fechado = True
+        try:
+            self.grab_release()
+        except Exception:
+            log.debug("Falha ignorada em MenuPopup._fechar()", exc_info=True)
+        if getattr(self._pai, "_menu_popup", None) is self:
+            self._pai._menu_popup = None
+        self.destroy()
+
+    @classmethod
+    def abrir(cls, pai, x: int, y: int, itens, titulo: Optional[str] = None,
+              largura: Optional[int] = None, ancora: str = "esq") -> "MenuPopup":
+        """Abre o menu (fechando outro que já esteja aberto)."""
+        anterior = getattr(pai, "_menu_popup", None)
+        if anterior is not None:
+            try:
+                anterior._fechar()
+            except Exception:
+                log.debug("Falha ignorada em MenuPopup.abrir()", exc_info=True)
+        menu = cls(pai, x, y, itens, titulo=titulo, largura=largura, ancora=ancora)
+        pai._menu_popup = menu
+        return menu
