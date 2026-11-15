@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+# Saída em UTF-8 no Windows (o console padrão, cp1252, não imprime acentos e setas dos testes).
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: utf-8
+
 jobs:
   testes:
     name: Testes (Python ${{ matrix.python }})
