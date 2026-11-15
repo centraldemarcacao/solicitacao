@@ -109,6 +109,7 @@ class Widget:
         self.binds_all = getattr(self, 'binds_all', {}); self.binds_all.setdefault(seq, []).append(fn)
     def bell(self): self.bips = getattr(self, 'bips', 0) + 1
     def title(self, t=None): self._title = t
+    def overrideredirect(self, v=None): self._sem_borda = v
     def geometry(self, g=None): self._geo = g
     def minsize(self, w, h): pass
     def resizable(self, a, b): pass
@@ -258,7 +259,8 @@ mb.showerror = lambda *a, **k: mb.erros.append(a)
 fd = types.ModuleType("tkinter.filedialog"); fd.CAMINHO = {"v": ""}
 fd.asksaveasfilename = lambda **k: fd.CAMINHO["v"]
 fd.askopenfilename = lambda **k: fd.CAMINHO.get("abrir", "")
-tk.Entry = type('Entry', (), {}); tk.Toplevel = type('Toplevel', (), {}); tk.Text = type('Text', (), {})
+class Toplevel(Widget): pass
+tk.Entry = type('Entry', (), {}); tk.Toplevel = Toplevel; tk.Text = type('Text', (), {})
 tk.ttk = ttk; tk.messagebox = mb; tk.filedialog = fd
 sys.modules.update({"tkinter": tk, "tkinter.ttk": ttk, "tkinter.messagebox": mb, "tkinter.filedialog": fd})
 
@@ -505,6 +507,61 @@ if _startfile_orig is not None:
 html_txt = open(abertos[0].replace("file://", ""), encoding="utf-8").read()
 check("<script>alert(1)</script>" not in html_txt and "&lt;script&gt;" in html_txt, "impressão escapa HTML dos dados")
 check("window.print()" in html_txt and "Liga Contra o Câncer" in html_txt, "página de impressão abre a caixa de impressão")
+# menus suspensos (clique direito e Exportar)
+from anotacoes import theme as _Tm
+from anotacoes.interface.widgets import ItemMenu, MenuPopup, SEPARADOR
+tr.selection_set(linha("Atrasada")); app.tabela._selecionou()
+class _Ev: x = 5; y = 5; x_root = 300; y_root = 400
+app._abrir_menu_contexto(_Ev())
+m = app._menu_popup
+check(m is not None and not m.dead, "clique direito abre o menu suspenso")
+check([i.rotulo for _, i in m._acoes] == ["Ver detalhes", "Editar", "Marcar como atendida",
+      "Marcar como pendente", "Excluir"], "menu de contexto: opções na ordem certa")
+check([i.atalho for _, i in m._acoes] == ["Enter", "F2", None, None, "Del"], "menu de contexto: dicas de atalho")
+check(all(i.icone for _, i in m._acoes), "menu de contexto: toda opção tem ícone")
+check([i.perigo for _, i in m._acoes] == [False] * 4 + [True], "só 'Excluir' é perigosa (vermelha)")
+check(m._geo.endswith("+300+400") or "+300+" in m._geo, "menu abre na posição do clique")
+m._destacar(0)
+check(m._acoes[0][0].cget("fg_color") == _Tm.SELECAO, "passar o mouse destaca a opção")
+m._destacar(4)
+check(m._acoes[0][0].cget("fg_color") == "transparent" and m._acoes[4][0].cget("fg_color") == _Tm.VERMELHO_CLARO,
+      "destaque anterior sai e 'Excluir' usa o vermelho claro")
+m._mover(1)
+check(m._atual == 0, "seta para baixo na última opção volta à primeira")
+m._mover(-1)
+check(m._atual == 4, "seta para cima na primeira opção vai para a última")
+m.binds["<Escape>"][0](None)
+check(m.dead and app._menu_popup is None, "Esc fecha o menu")
+
+# escolher uma opção fecha o menu e executa o comando depois
+chamadas = []
+m2 = MenuPopup.abrir(app, 10, 10, [ItemMenu("A", lambda: chamadas.append("A"), "eye"), SEPARADOR,
+                                   ItemMenu("B", lambda: chamadas.append("B"), "trash", perigo=True)],
+                     titulo="2 registros selecionados")
+m2._ativar(1)
+check(m2.dead and not chamadas, "escolher fecha o menu antes de executar")
+ms, fn = app.after_calls[-1]; fn()
+check(chamadas == ["B"], "o comando da opção escolhida é executado")
+m2._ativar(0)
+check(chamadas == ["B"], "menu fechado ignora novos cliques")
+
+# abrir outro menu fecha o anterior; clique fora fecha
+m3 = MenuPopup.abrir(app, 10, 10, [ItemMenu("A", lambda: None)])
+m4 = MenuPopup.abrir(app, 20, 20, [ItemMenu("A", lambda: None)])
+check(m3.dead and not m4.dead and app._menu_popup is m4, "só um menu aberto por vez")
+class _Fora: x_root = 99999; y_root = 99999
+m4.binds["<Button-1>"][0](_Fora())
+check(m4.dead, "clique fora fecha o menu")
+
+# menu do botão Exportar
+app._abrir_menu_exportar()
+m5 = app._menu_popup
+check([i.rotulo for _, i in m5._acoes] == ["Exportar para Excel (CSV)", "Imprimir lista"],
+      "botão Exportar abre o menu com CSV e impressão")
+check([i.atalho for _, i in m5._acoes] == ["Ctrl+E", "Ctrl+P"], "menu Exportar mostra os atalhos")
+m5._fechar()
+check(m5.dead, "menu Exportar fecha")
+
 # edição pelo diálogo (com retorno)
 rid = int(linha("Sem retorno")); app.editar_registro(rid)
 dlg = app.kids[-1]
