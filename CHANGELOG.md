@@ -13,9 +13,10 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 * **Registro de falhas com rotação**: `erros.log` passa a ter no máximo 512 KB (mais 3 cópias antigas) e
   recebe também as falhas que antes eram ignoradas em silêncio.
 * **Projeto Supabase fixo** preenchido em `anotacoes/nuvem/projeto.py` (a página Nuvem pede só e-mail e senha).
-* **Publicação**: workflows separados. `ci.yml` testa a cada push e pull request (Python 3.10, 3.12 e 3.13,
-  simulação da interface e Tk real); `release.yml` só roda em tags e **não publica se algum teste falhar**
-  (antes, a simulação, o Tk real e o teste "o executável abre" não bloqueavam a entrega).
+* **Release automática a cada push em `main`**: `release.yml` roda os testes (`ci.yml`: Python 3.10, 3.12 e
+  3.13, simulação da interface e Tk real), gera o `.exe` e o instalador e publica a Release `2.13.N` sozinho.
+  **Nada é publicado se algum teste falhar** (antes, a simulação, o Tk real e o teste "o executável abre" não
+  bloqueavam a entrega). Envios só de documentação não publicam; tags manuais continuam valendo.
 * **Dependências com versão fixa** e Dependabot para propor atualizações.
 * Documentação corrigida (nome real do banco, pasta de dados, troca do `.exe` sem script).
 

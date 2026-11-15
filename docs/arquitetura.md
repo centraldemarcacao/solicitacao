@@ -1,7 +1,7 @@
 # Arquitetura
 
 Aplicativo desktop (Windows) em Python 3.10+ com CustomTkinter e SQLite, distribuído como um
-único `.exe` (PyInstaller, gerado pelo GitHub Actions ao publicar uma tag de versão).
+único `.exe` (PyInstaller, gerado e publicado pelo GitHub Actions a cada push em `main`).
 
 ## Camadas
 
@@ -94,7 +94,8 @@ python tests/interface/simulacao_interface.py     # simulação da interface (se
 interface valida widgets e fluxos, mas **não** a aparência: o visual deve ser conferido no Windows.
 
 * `.github/workflows/ci.yml`: testes de unidade (Python 3.10, 3.12 e 3.13), simulação da interface e teste de
-  fumaça com Tk real, a cada push em `main` e em pull requests. **Tudo é obrigatório.**
-* `.github/workflows/release.yml`: roda só em tags (`vX.Y.Z`) ou manualmente. Chama o `ci.yml` e só então gera o
-  `.exe`, testa se ele abre, gera o instalador e publica a Release. Se algum teste falhar, nada é publicado.
+  fumaça com Tk real, em pull requests (e chamado pelo `release.yml`). **Tudo é obrigatório.**
+* `.github/workflows/release.yml`: roda a cada push em `main` (menos os que mudam só `*.md`/`docs/`), em tags
+  e manualmente. Chama o `ci.yml` e só então gera o `.exe`, testa se ele abre, gera o instalador e publica a
+  Release `v<VERSAO_BASE>.<nº da execução>`. Se algum teste falhar, nada é publicado.
 * Dependências com versão fixa em `requirements.txt` / `requirements-dev.txt`; o Dependabot propõe atualizações.

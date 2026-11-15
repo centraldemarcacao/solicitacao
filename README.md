@@ -64,7 +64,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 ├── installer/anotacoes.iss    # script do instalador (Inno Setup, usado pelo Actions)
 ├── scripts/build.bat          # gera o .exe no seu computador
 ├── docs/                      # guias (segurança, arquitetura, publicar versão, nuvem, personalizar)
-├── .github/workflows/         # ci.yml (testes) e release.yml (gera o .exe e publica Releases em tags)
+├── .github/workflows/         # ci.yml (testes) e release.yml (testa, gera o .exe e publica a Release a cada push em main)
 ├── .github/dependabot.yml     # atualizações das dependências fixadas
 ├── CHANGELOG.md               # histórico de versões
 ├── requirements.txt           # dependências de execução
@@ -90,11 +90,12 @@ python tests/interface/simulacao_interface.py     # simulação da interface (se
 A simulação valida widgets e fluxos, mas não a aparência; confira o visual no Windows.
 
 ## Gerar o `.exe`
-* **No GitHub (recomendado):** cada envio para `main` (e cada pull request) roda os testes e a
-  verificação da interface (aba **Actions**), sem gerar `.exe`. Ao criar uma tag `vX.Y.Z`, os mesmos
-  testes rodam de novo (**todos obrigatórios**) e, só se passarem, o `.exe`, o instalador e o `SHA256.txt`
-  são publicados em **Releases** e os programas instalados se atualizam sozinhos. Para só baixar um `.exe`
-  de teste, rode **Actions > Publicar versão (.exe) > Run workflow** (não cria Release). Veja [docs/publicar-versao.md](docs/publicar-versao.md).
+* **No GitHub (recomendado):** **cada envio para `main` publica uma Release sozinho**: roda os testes e a
+  verificação da interface (**todos obrigatórios**) e, só se passarem, gera o `.exe`, o instalador e o
+  `SHA256.txt` e os publica em **Releases** (versão `2.13.N`, que sobe a cada envio); os programas
+  instalados se atualizam sozinhos. Envios que mudam só documentação (`*.md`, `docs/`) não publicam.
+  Pull requests rodam só os testes. Para só baixar um `.exe` de teste, use **Actions > Publicar versão (.exe)
+  > Run workflow** (não cria Release). Veja [docs/publicar-versao.md](docs/publicar-versao.md).
 * **No seu computador:** duplo clique em `scripts/build.bat` (resultado em `dist/`).
 
 ## Instalação e uso
