@@ -615,6 +615,37 @@ class Database:
         )
         return int(linhas[0][0])
 
+    def indicadores(self, dias: int = 14) -> dict:
+        """Números do painel (só contagens, nenhum texto de paciente).
+
+        Retorna: total, pendentes, atendidas, urgentes, retornos, hoje, antigas (pendentes há
+        mais de 7 dias) e por_dia (lista de `dias` pares (AAAA-MM-DD, quantidade), do mais
+        antigo ao de hoje, com zeros nos dias sem registro).
+        """
+        dias = max(1, int(dias))
+        hoje = datetime.now().date()
+        inicio = hoje - timedelta(days=dias - 1)
+        limite_antigas = (hoje - timedelta(days=7)).strftime("%Y-%m-%d")
+        por_status = self.contar_por_status()
+        antigas = int(self._consultar(
+            "SELECT COUNT(*) FROM solicitacoes WHERE excluido_em IS NULL "
+            "AND status = ? AND substr(data_hora, 1, 10) < ?",
+            (STATUS_PENDENTE, limite_antigas))[0][0])
+        contagem = dict(self._consultar(
+            "SELECT substr(data_hora, 1, 10), COUNT(*) FROM solicitacoes "
+            "WHERE excluido_em IS NULL AND substr(data_hora, 1, 10) >= ? "
+            "GROUP BY 1", (inicio.strftime("%Y-%m-%d"),)))
+        por_dia = []
+        for i in range(dias):
+            d = (inicio + timedelta(days=i)).strftime("%Y-%m-%d")
+            por_dia.append((d, int(contagem.get(d, 0))))
+        pend, aten = por_status[STATUS_PENDENTE], por_status[STATUS_ATENDIDA]
+        return {
+            "total": sum(por_status.values()), "pendentes": pend, "atendidas": aten,
+            "urgentes": self.contar_urgentes(), "retornos": self.contar_retornos(),
+            "hoje": self.contar_hoje(), "antigas": antigas, "por_dia": por_dia,
+        }
+
     def total_registros(self) -> int:
         """Total de linhas na tabela, inclusive a lixeira."""
         return int(self._consultar("SELECT COUNT(*) FROM solicitacoes")[0][0])

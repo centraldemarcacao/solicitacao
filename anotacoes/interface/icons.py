@@ -133,6 +133,12 @@ def _download(d, c):
     _linha(d, [(10, 53), (54, 53)], c, 6)
 
 
+def _grid(d, c):
+    # painel: quatro blocos arredondados
+    for x, y in ((10, 10), (36, 10), (10, 36), (36, 36)):
+        d.rounded_rectangle(_caixa(x, y, x + 18, y + 18), radius=_s(4), fill=c)
+
+
 def _cloud(d, c):
     # nuvem cheia com uma seta para cima recortada (sincronizar)
     d.ellipse(_caixa(6, 28, 30, 52), fill=c)
@@ -193,6 +199,7 @@ _DESENHOS = {
     "bell": _bell,
     "bell_off": _bell_off,
     "cloud": _cloud,
+    "grid": _grid,
     "sun": _sun,
     "download": _download,
     "edit": _edit,

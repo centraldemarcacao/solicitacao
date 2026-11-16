@@ -4,6 +4,12 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Painel de controle** (menu *Painel*), com dois acessos: **Meu painel** (todo usuário: só os próprios números,
+  cartões, % atendidas e gráfico dos últimos 14 dias, calculados no computador) e **Administração** (só
+  administradores: contas da nuvem, ativar/desativar acesso, promover/rebaixar papel, totais por usuário e
+  registro das últimas ações). O administrador vê **apenas contagens, nunca nome, contato ou descrição de
+  paciente**. O papel é decidido pelo servidor (`supabase/painel.sql`); sem internet ou em caso de erro, a
+  administração fica oculta. Primeiro administrador: `python scripts/usuarios_nuvem.py papel EMAIL admin`.
 * **Banco em modo WAL** (`journal_mode=WAL`, `synchronous=NORMAL`): mais resistente a queda de energia e
   a travamentos. Os backups continuam sendo um arquivo único. Se a pasta não aceitar WAL, o programa segue
   no modo antigo e registra o aviso.

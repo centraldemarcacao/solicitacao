@@ -603,7 +603,7 @@ check(tab(app.ent_retorno) == "break" and app.ent_contato.focused, "Tab: Retorna
 app.txt_desc.focused = False; tab(app.ent_retorno, "<Shift-Tab>")
 check(app.txt_desc.focused, "Shift+Tab: Retornar em -> Descrição")
 faixas = [it._faixa for it in app.nav.values()]
-check(all(f._cfg.get("height") == 1 for f in faixas) and len(app.nav) == 6, "menu com 6 itens (Resumo, Novo, Histórico, Lixeira, Backup, Nuvem)")
+check(all(f._cfg.get("height") == 1 for f in faixas) and len(app.nav) == 7, "menu com 7 itens (Resumo, Painel, Novo, Histórico, Lixeira, Backup, Nuvem)")
 
 
 def trocar_tema():
@@ -1402,6 +1402,110 @@ check(esperar(app3) and eventos["cadastro"] == ("nova@solicitacao.local", "Senha
 nuvem_gui.ClienteSupabase, nuvem_gui.testar_conexao, nuvem_gui.sincronizar = _orig_cli2, _orig_tc2, _orig_sinc2
 RESP["v"] = True
 _projeto_mod.PERMITIR_CADASTRO = False
+
+# ----------------------------------------------------------------------
+# Painel de controle (usuário x administrador)
+# ----------------------------------------------------------------------
+from anotacoes.interface.mixins import painel as painel_gui
+from anotacoes.nuvem import painel as painel_core
+from anotacoes.nuvem.cliente import NuvemErro as _NuvemErro
+
+app._nuvem_cfg.definir(url="https://abc.supabase.co", chave="sb_publishable_" + "p" * 30,
+                       refresh_token=None, email="eu@x.com")
+app.mostrar_pagina("painel")
+check(app.paginas["painel"].mapped and "painel" in app.nav, "painel: página abre e tem item no menu")
+check(app.abas_painel._cfg.get("values") == [painel_gui.ABA_MEU],
+      "painel: sem conexão só existe 'Meu painel' (sem aba de administração)")
+check("computador" in app.pil_painel_papel._rotulo.cget("text").lower(),
+      "painel: sem nuvem mostra 'Somente neste computador'")
+ind = app.db.indicadores(14)
+check(app._painel_cartoes["total"]._valor.cget("text") == str(ind["total"])
+      and len(ind["por_dia"]) == 14 and len(app._painel_grafico.winfo_children()) == 14,
+      "painel: cartões e gráfico de 14 dias refletem o banco local")
+
+chamadas = []
+class _ClientePainel:
+    def __init__(self, papel, falhar=False): self.papel, self.falhar = papel, falhar
+    def rpc(self, nome, corpo=None):
+        chamadas.append((nome, corpo))
+        if self.falhar: raise _NuvemErro("Sem conexão com o Supabase.")
+        if nome == "painel_meu_papel": return self.papel
+        if nome == "painel_listar_usuarios":
+            return [
+                {"id": "u1", "email": "eu@x.com", "papel": "admin", "ativo": True, "registros": 5,
+                 "pendentes": 2, "atendidas": 3, "urgentes": 1, "criado_em": "2026-01-02T10:00:00+00:00",
+                 "ultimo_acesso": None, "ultima_atividade": None},
+                {"id": "u2", "email": "ana@x.com", "papel": "usuario", "ativo": True, "registros": 4,
+                 "pendentes": 4, "atendidas": 0, "urgentes": 0, "criado_em": "2026-02-02T10:00:00Z",
+                 "ultimo_acesso": "2026-11-10T12:00:00Z", "ultima_atividade": "2026-11-10T12:00:00Z"}]
+        if nome == "painel_listar_auditoria":
+            return [{"quando": "2026-11-10T12:00:00Z", "admin_email": "eu@x.com",
+                     "acao": "desativar_acesso", "alvo_email": "ana@x.com", "detalhe": None}]
+        return None
+
+def rodar_painel(cliente, acao=None):
+    app._cliente_nuvem = lambda timeout=20: cliente
+    app._nuvem_cfg.definir(refresh_token="r")
+    app._painel_executar(acao, "Feito.")
+    for _ in range(300):
+        if not app._painel_fila.empty():
+            app._sondar_painel(); return True
+        _time.sleep(0.01)
+    return False
+
+check(rodar_painel(_ClientePainel("usuario")) and app._painel_papel == "usuario"
+      and app.abas_painel._cfg.get("values") == [painel_gui.ABA_MEU]
+      and not app._aba_admin.mapped
+      and not any(c[0] == "painel_listar_usuarios" for c in chamadas),
+      "painel: usuário comum não recebe a lista de contas nem vê a administração")
+check("Usuário" in app.pil_painel_papel._rotulo.cget("text"), "painel: selo 'Usuário'")
+
+chamadas.clear()
+check(rodar_painel(_ClientePainel("admin")) and app._painel_papel == "admin"
+      and app.abas_painel._cfg.get("values") == [painel_gui.ABA_MEU, painel_gui.ABA_ADMIN],
+      "painel: administrador confirmado pelo servidor ganha a aba Administração")
+check(len(app.tabela_painel.tree.rows) == 2 and app._admin_cartoes["usuarios"]._valor.cget("text") == "2"
+      and app._admin_cartoes["registros"]._valor.cget("text") == "9",
+      "painel: tabela e cartões somam as contas")
+check("ana@x.com" in app.lbl_painel_auditoria.cget("text") and "desativou" in app.lbl_painel_auditoria.cget("text"),
+      "painel: lista as últimas ações de administração")
+app._trocar_aba_painel(painel_gui.ABA_ADMIN)
+check(app._aba_admin.mapped and not app._aba_meu.mapped, "painel: abre a aba Administração")
+
+app.tabela_painel.tree.sel = ["u1"]; app._atualizar_botoes_painel()
+check(app.btn_painel_acesso._cfg.get("state") == "disabled" and app.btn_painel_papel._cfg.get("state") == "disabled",
+      "painel: o administrador não pode agir sobre a própria conta")
+app.tabela_painel.tree.sel = ["u2"]; app._atualizar_botoes_painel()
+check(app.btn_painel_acesso._cfg.get("state") == "normal"
+      and "Desativar" in app.btn_painel_acesso._cfg.get("text"), "painel: botão vira 'Desativar acesso'")
+
+chamadas.clear(); RESP["v"] = False
+app._cliente_nuvem = lambda timeout=20: _ClientePainel("admin")
+app._alternar_acesso()
+check(not chamadas, "painel: cancelar a confirmação não chama o servidor")
+RESP["v"] = True
+app._alternar_acesso()
+for _ in range(300):
+    if not app._painel_fila.empty(): app._sondar_painel(); break
+    _time.sleep(0.01)
+check(("painel_definir_acesso", {"p_usuario": "u2", "p_ativo": False}) in chamadas,
+      "painel: desativar acesso chama a função do servidor com o usuário certo")
+chamadas.clear()
+app._alternar_papel()
+for _ in range(300):
+    if not app._painel_fila.empty(): app._sondar_painel(); break
+    _time.sleep(0.01)
+check(("painel_definir_papel", {"p_usuario": "u2", "p_papel": "admin"}) in chamadas,
+      "painel: promover a administrador chama a função do servidor")
+
+check(rodar_painel(_ClientePainel("admin", falhar=True)) and app._painel_papel is None
+      and app.abas_painel._cfg.get("values") == [painel_gui.ABA_MEU] and not app._aba_admin.mapped,
+      "painel: falha de rede fecha a administração (nunca presume ser admin)")
+copiado.clear()
+app._copiar_sql_painel()
+check(copiado and "painel_listar_usuarios" in copiado[0], "painel: botão copia o SQL do painel")
+app._nuvem_cfg.definir(refresh_token=None)
+app.mostrar_pagina("novo")
 
 _projeto_mod.projeto_fixo = _orig_fixo
 

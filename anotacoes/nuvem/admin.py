@@ -126,10 +126,21 @@ class AdminSupabase(ClienteSupabase):
         usuario = self._achar(email)
         self._admin("PUT", f"/users/{usuario['id']}", {"password": senha})
 
+    def definir_papel(self, email: str, papel: str) -> None:
+        """Define o papel ('admin' ou 'usuario') em app_metadata (só o servidor altera)."""
+        if papel not in PAPEIS:
+            raise NuvemErro("Papel inválido. Use admin ou usuario.")
+        usuario = self._achar(email)
+        self._admin("PUT", f"/users/{usuario['id']}",
+                    {"app_metadata": {"role": papel}})
+
 
 # ----------------------------------------------------------------------
 # Linha de comando
 # ----------------------------------------------------------------------
+PAPEIS = ("admin", "usuario")
+
+
 def _montar_parser() -> argparse.ArgumentParser:
     comum = argparse.ArgumentParser(add_help=False)
     comum.add_argument("--url", help=f"Project URL (padrão: ${VARIAVEL_URL} ou o de nuvem/projeto.py)")
@@ -145,6 +156,12 @@ def _montar_parser() -> argparse.ArgumentParser:
         p.add_argument("email")
         p.add_argument("--gerar-senha", action="store_true",
                        help="gera uma senha forte e mostra uma única vez")
+        if nome == "criar":
+            p.add_argument("--admin", action="store_true",
+                           help="já cria como administrador do painel")
+    p = sub.add_parser("papel", parents=[comum], help="define o papel: admin ou usuario")
+    p.add_argument("email")
+    p.add_argument("papel", choices=PAPEIS)
     return parser
 
 
@@ -171,6 +188,12 @@ def executar_cli(argv: List[str], ambiente: Optional[dict] = None,
             saida(f"{len(usuarios)} usuário(s).")
             return 0
 
+        if args.comando == "papel":
+            admin.definir_papel(args.email, args.papel)
+            saida(f"{args.email} agora é {args.papel}. "
+                  "Vale no próximo login (ou quando a sessão renovar).")
+            return 0
+
         if args.gerar_senha:
             senha = gerar_senha()
         else:
@@ -180,6 +203,9 @@ def executar_cli(argv: List[str], ambiente: Optional[dict] = None,
         if args.comando == "criar":
             usuario = admin.criar_usuario(args.email, senha)
             saida(f"Usuário criado: {usuario['email']}")
+            if args.admin:
+                admin.definir_papel(usuario["email"], "admin")
+                saida("Papel: administrador.")
         else:
             admin.trocar_senha(args.email, senha)
             saida(f"Senha de {args.email} alterada.")

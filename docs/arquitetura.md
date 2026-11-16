@@ -18,7 +18,7 @@ main.py ──► anotacoes/app.py ──► interface/janela.py (App)
 | Pasta | Responsabilidade | Depende de |
 |-------|------------------|------------|
 | `anotacoes/nucleo/` | Banco SQLite (`database.py`), validações e formatação (`util.py`), preferências, exportação CSV/HTML, identidade (nome/logo). **Sem interface.** | biblioteca padrão, Pillow, `theme.py` |
-| `anotacoes/nuvem/` | Cliente HTTP do Supabase (`cliente.py`: login, cadastro, REST), motor de sincronização (`sincronizacao.py`), o SQL de configuração (`sql.py`) e a administração de usuários com a chave secreta (`admin.py`, só usada por `scripts/usuarios_nuvem.py`, **nunca** pelo programa). **Sem interface.** | `nucleo/` |
+| `anotacoes/nuvem/` | Cliente HTTP do Supabase (`cliente.py`: login, cadastro, REST), motor de sincronização (`sincronizacao.py`), o SQL de configuração (`sql.py`), o painel (`painel.py`, funções `painel_*` do Supabase), o SQL do painel e a administração de usuários com a chave secreta (`admin.py`, só usada por `scripts/usuarios_nuvem.py`, **nunca** pelo programa). **Sem interface.** | `nucleo/` |
 | `anotacoes/atualizacao/` | Verificação, download, conferência SHA-256 e troca do `.exe` (`updater.py`). **Sem interface.** | biblioteca padrão |
 | `anotacoes/interface/` | Janela principal (`janela.py`), componentes (`widgets.py`), ícones desenhados com Pillow (`icons.py`) e os *mixins* de cada área em `mixins/`. | todas as anteriores |
 | `anotacoes/theme.py` | Marca, versão, repositório de atualização e paleta clara/escura. | — |

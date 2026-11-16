@@ -204,12 +204,24 @@ class ClienteSupabase:
             self._acesso = None
             return self._http(metodo, caminho, corpo, cabecalhos, self._token_valido())
 
+    def rpc(self, nome: str, corpo: Optional[dict] = None):
+        """Chama uma função do banco (`/rest/v1/rpc/<nome>`), com a sessão do usuário."""
+        return self.requisitar("POST", f"rpc/{nome}", corpo=corpo if corpo is not None else {})
+
 
 def _erro_http(codigo: int, detalhe: dict) -> NuvemErro:
     """Traduz respostas de erro do Supabase em mensagens claras."""
     texto = " ".join(str(detalhe.get(k) or "") for k in
                      ("message", "msg", "error_description", "error", "hint")).lower()
     cod = str(detalhe.get("code") or detalhe.get("error_code") or "")
+    if cod == "PT403":
+        return NuvemErro("Acesso negado: esta ação é exclusiva de administradores.")
+    if cod in ("PT400", "PT404"):
+        resumo = (detalhe.get("message") or "").strip()
+        return NuvemErro(resumo or "Pedido recusado pelo servidor.")
+    if cod == "PGRST202" or "could not find the function" in texto:
+        return NuvemErro("O painel ainda não foi configurado na nuvem. Execute o SQL do "
+                         "painel (botão “Copiar SQL do painel”) no SQL Editor do Supabase.")
     if cod == "PGRST205" or "could not find the table" in texto or (
             codigo == 404 and "relation" in texto):
         return NuvemErro("A tabela da nuvem ainda não existe. Copie o script SQL "

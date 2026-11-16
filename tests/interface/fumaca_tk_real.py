@@ -73,6 +73,26 @@ def main() -> int:
         assert app.paginas[chave].winfo_ismapped(), f"página {chave} não apareceu"
         passo(f"página '{chave}' aparece")
 
+    # Painel: aba de administração com dados de mentira (sem rede)
+    from anotacoes.nuvem import painel as _pn
+    app.mostrar_pagina("painel")
+    app._painel_papel = _pn.PAPEL_ADMIN
+    app._aplicar_papel()
+    app._preencher_admin(
+        [_pn.UsuarioPainel("u1", "eu@x.com", "admin", True, "-", "-", 3, 1, 2, 0, "-"),
+         _pn.UsuarioPainel("u2", "ana@x.com", "usuario", False, "-", "-", 0, 0, 0, 0, "-")],
+        [_pn.AcaoAuditoria("-", "eu@x.com", "ativar_acesso", "ana@x.com", "")])
+    app._trocar_aba_painel("Administração")
+    processar(app)
+    assert app._aba_admin.winfo_ismapped(), "aba Administração não apareceu"
+    app.tabela_painel.tree.selection_set("u2")
+    processar(app)
+    assert app.btn_painel_acesso.cget("text") == "Ativar acesso"
+    passo("painel: aba Administração e seleção de conta")
+    app._painel_papel = None
+    app._aplicar_papel()
+    app.mostrar_pagina("novo")
+
     app.mostrar_pagina("config")
     app.atualizar_config()
     processar(app)

@@ -35,6 +35,7 @@ from anotacoes.interface.mixins.identidade import IdentidadeMixin
 from anotacoes.interface.mixins.modelos import ModelosMixin
 from anotacoes.interface.mixins.nuvem import NuvemMixin
 from anotacoes.interface.mixins.paginas import PaginasExtrasMixin
+from anotacoes.interface.mixins.painel import PainelMixin
 from anotacoes.interface.mixins.pausas import PausasMixin
 from anotacoes.interface.mixins.primeiro_uso import PrimeiroUsoMixin
 from anotacoes.interface.mixins.resumo import ResumoMixin
@@ -92,6 +93,7 @@ PAG_HIST = "historico"
 PAG_LIXO = "lixeira"
 PAG_BACKUP = "backup"
 PAG_NUVEM = "nuvem"
+PAG_PAINEL = "painel"
 PAG_CONFIG = "config"       # sem item no menu: abre pela engrenagem do rodapé (Ctrl + ,)
 
 # Tamanho de projeto da janela (unidades lógicas, antes da escala do Windows)
@@ -116,7 +118,7 @@ COLUNAS_ORDENAVEIS = ("urgente", "data_hora", "nome", "contato", "descricao", "r
 
 
 class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
-          NuvemMixin, IdentidadeMixin, PaginasExtrasMixin, PausasMixin, BloqueioMixin,
+          NuvemMixin, PainelMixin, IdentidadeMixin, PaginasExtrasMixin, PausasMixin, BloqueioMixin,
           ConfiguracoesMixin, ModelosMixin, PrimeiroUsoMixin, ctk.CTk):
     def __init__(self, minimizado: bool = False) -> None:
         ctk.set_appearance_mode("light")
@@ -484,6 +486,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.nav = {}
         for chave, texto, nome_icone in (
             (PAG_RESUMO, "Resumo do dia", "clipboard"),
+            (PAG_PAINEL, "Painel", "grid"),
             (PAG_NOVO, "Novo registro", "plus"),
             (PAG_HIST, "Histórico", "list"),
             (PAG_LIXO, "Lixeira", "trash"),
@@ -620,6 +623,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             PAG_LIXO: self._criar_pagina_lixeira(self.area),
             PAG_BACKUP: self._criar_pagina_backup(self.area),
             PAG_NUVEM: self._criar_pagina_nuvem(self.area),
+            PAG_PAINEL: self._criar_pagina_painel(self.area),
             PAG_CONFIG: self._criar_pagina_config(self.area),
         }
         self.toast = Notificacao(self.area)
@@ -642,6 +646,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.atualizar_backups()
         elif chave == PAG_NUVEM:
             self.atualizar_nuvem()
+        elif chave == PAG_PAINEL:
+            self.abrir_painel()
         elif chave == PAG_CONFIG:
             self.atualizar_config()
         else:
@@ -1324,6 +1330,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.atualizar_lateral()
         self.atualizar_lixeira()
         self.atualizar_resumo()
+        self.atualizar_painel_local()
 
     # --- Ações sobre registros ------------------------------------------
     def _ids_selecionados(self) -> list:

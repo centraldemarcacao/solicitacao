@@ -14,6 +14,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 * **Lixeira** (30 dias) e **Backup** automático/manual com restauração.
 * **Banco protegido**: modo WAL e checagem de integridade ao abrir; se o arquivo estiver danificado, o programa oferece restaurar o último backup íntegro (o arquivo ruim é guardado, não apagado).
 * **Desfazer** (Ctrl+Z), atalhos de teclado (F1 mostra todos) e tema claro/escuro.
+* **Painel de controle**: números pessoais para todos e gestão de contas (ativar/desativar, papéis) para administradores, sem expor dados de pacientes.
 * **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline. O administrador cria e troca senhas
   de usuários sem abrir o painel (`scripts/usuarios_nuvem.py`; veja `docs/nuvem-supabase.md`).
 * **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); horários editáveis e liga/desliga no sino do menu (Ctrl + L).

@@ -79,7 +79,8 @@ class FakeAuth:
         if metodo == "PUT":
             uid = caminho.rsplit("/", 1)[1]
             usuario = next(u for u in self.usuarios if u["id"] == uid)
-            usuario["password"] = corpo["password"]
+            for chave, valor in corpo.items():
+                usuario[chave] = valor
             return {"id": uid}
         raise AssertionError(metodo)
 
@@ -159,6 +160,38 @@ class TestAdmin(Base):
         self.server.chave_valida = "outra"
         with self.assertRaises(NuvemErro):
             self.adm().listar_usuarios()
+
+
+class TestPapel(Base):
+    def test_definir_papel_grava_em_app_metadata(self):
+        self.server.adicionar("chefe@x.co")
+        AdminSupabase(URL, SECRETA).definir_papel("Chefe@x.co", "admin")
+        self.assertEqual(self.server.usuarios[0]["app_metadata"], {"role": "admin"})
+        AdminSupabase(URL, SECRETA).definir_papel("chefe@x.co", "usuario")
+        self.assertEqual(self.server.usuarios[0]["app_metadata"], {"role": "usuario"})
+
+    def test_papel_invalido_e_usuario_inexistente(self):
+        with self.assertRaises(NuvemErro):
+            AdminSupabase(URL, SECRETA).definir_papel("a@b.co", "root")
+        with self.assertRaisesRegex(NuvemErro, "Não existe"):
+            AdminSupabase(URL, SECRETA).definir_papel("a@b.co", "admin")
+
+    def test_cli_papel_e_criar_admin(self):
+        self.server.adicionar("a@b.co")
+        saida = []
+        codigo = executar_cli(["papel", "a@b.co", "admin"], ambiente={admin.VARIAVEL_CHAVE: SECRETA},
+                              saida=saida.append)
+        self.assertEqual(codigo, 0)
+        self.assertEqual(self.server.usuarios[0]["app_metadata"]["role"], "admin")
+        codigo = executar_cli(["criar", "novo@b.co", "--gerar-senha", "--admin"],
+                              ambiente={admin.VARIAVEL_CHAVE: SECRETA}, saida=saida.append)
+        self.assertEqual(codigo, 0)
+        self.assertEqual(self.server.usuarios[1]["app_metadata"]["role"], "admin")
+
+    def test_cli_papel_recusa_valor_desconhecido(self):
+        with self.assertRaises(SystemExit):
+            executar_cli(["papel", "a@b.co", "root"], ambiente={admin.VARIAVEL_CHAVE: SECRETA},
+                         saida=lambda _t: None)
 
 
 class TestCadastroNoCliente(Base):

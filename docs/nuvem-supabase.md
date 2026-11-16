@@ -65,6 +65,30 @@ Nuvem mostra só **e-mail e senha**.
   (`supabase/setup.sql`). Se o repositório for público, isso continua seguro, desde que o SQL tenha
   sido executado e o cadastro aberto esteja desligado.
 
+## Painel de controle (administrador e usuário)
+O menu **Painel** tem duas abas:
+
+* **Meu painel**: qualquer usuário vê só os seus números (calculados neste computador).
+* **Administração**: aparece apenas para administradores *confirmados pelo servidor*. Mostra as contas, os totais
+  por conta (registros, pendentes, atendidas), permite **ativar/desativar o acesso** e **alterar o papel**, e lista
+  as últimas ações. Nunca exibe nome, contato ou descrição de pacientes.
+
+**Ativar (uma vez):**
+1. No Supabase, SQL Editor, execute `supabase/setup.sql` e depois `supabase/painel.sql` (no programa:
+   Painel > Administração > *Copiar SQL do painel*; antes do primeiro administrador, copie o arquivo do repositório).
+2. Defina o primeiro administrador: `python scripts/usuarios_nuvem.py papel seu@email.com admin`
+   (ou o `update` comentado no fim do `painel.sql`). Entre de novo no programa para valer.
+3. Novos usuários: `python scripts/usuarios_nuvem.py criar EMAIL --gerar-senha [--admin]`.
+
+**Como é protegido:** o papel fica em `app_metadata` (o usuário não consegue alterar); cada função do painel
+confere o papel no banco a cada chamada; visitantes (`anon`) não executam nada; o programa nunca recebe a chave
+secreta; cada ação administrativa é gravada em `painel_auditoria`. Ninguém desativa o próprio acesso nem remove o
+próprio papel de administrador.
+
+**Limites:** desativar uma conta bloqueia novos logins e renovações, mas quem já está conectado mantém a sessão até
+o token expirar (cerca de 1 hora). Os dados da conta são mantidos. Dados de saúde: informe-se sobre a LGPD e use
+o painel só com as pessoas autorizadas.
+
 ## Criar usuários sem abrir o painel
 Para o **administrador** criar, listar ou trocar a senha de usuários direto do projeto, sem entrar
 no Supabase:
