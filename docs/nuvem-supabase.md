@@ -78,7 +78,10 @@ O menu **Painel** tem duas abas:
    Painel > Administração > *Copiar SQL do painel*; antes do primeiro administrador, copie o arquivo do repositório).
 2. Defina o primeiro administrador: `python scripts/usuarios_nuvem.py papel seu@email.com admin`
    (ou o `update` comentado no fim do `painel.sql`). Entre de novo no programa para valer.
-3. Novos usuários: `python scripts/usuarios_nuvem.py criar EMAIL --gerar-senha [--admin]`.
+   **Sem terminal (pelo GitHub):** em Settings > Secrets and variables > Actions, crie o segredo
+   `SUPABASE_SERVICE_KEY` com a chave secreta; depois, em Actions > *Definir papel na nuvem* > Run workflow,
+   informe o e-mail e o papel. **Sem GitHub:** no SQL Editor, rode o `update` comentado no fim do `painel.sql`.
+3. Novos usuários (sem terminal): Supabase > Authentication > Users > Add user > Create new user, marcando *Auto Confirm User*. Pelo terminal: `python scripts/usuarios_nuvem.py criar EMAIL --gerar-senha [--admin]`.
 
 **Como é protegido:** o papel fica em `app_metadata` (o usuário não consegue alterar); cada função do painel
 confere o papel no banco a cada chamada; visitantes (`anon`) não executam nada; o programa nunca recebe a chave
