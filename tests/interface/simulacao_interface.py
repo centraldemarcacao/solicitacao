@@ -603,7 +603,7 @@ check(tab(app.ent_retorno) == "break" and app.ent_contato.focused, "Tab: Retorna
 app.txt_desc.focused = False; tab(app.ent_retorno, "<Shift-Tab>")
 check(app.txt_desc.focused, "Shift+Tab: Retornar em -> Descrição")
 faixas = [it._faixa for it in app.nav.values()]
-check(all(f._cfg.get("height") == 1 for f in faixas) and len(app.nav) == 7, "menu com 7 itens (Resumo, Painel, Novo, Histórico, Lixeira, Backup, Nuvem)")
+check(all(f._cfg.get("height") == 1 for f in faixas) and list(app.nav) == ["resumo", "novo", "historico", "lixeira", "painel"], "menu: Resumo, Novo, Histórico, Lixeira e Painel (o último); Backup e Nuvem ficam em Configurações")
 
 
 def trocar_tema():
@@ -781,7 +781,7 @@ app.mostrar_pagina("lixeira"); app.esvaziar_lixeira()
 check(app.db.contar_lixeira() == 0, "esvaziar lixeira")
 # backup
 app.mostrar_pagina("backup")
-check(app.paginas["backup"].mapped, "página Backup abre")
+check(app.paginas["config"].mapped and app._aba_backup.mapped and not app._aba_seguranca.mapped, "Backup abre como aba de Configurações")
 app.fazer_backup_agora()
 check(len(app.db.listar_backups()) >= 1, "backup manual criado")
 app.atualizar_backups()
@@ -798,11 +798,11 @@ import time as _time
 from anotacoes.nuvem.sincronizacao import Resultado
 gui_nuvem = nuvem_gui
 app.mostrar_pagina("nuvem")
-check(app.paginas["nuvem"].mapped, "página Nuvem abre")
+check(app.paginas["config"].mapped and app._aba_nuvem.mapped, "Nuvem abre como aba de Configurações")
 check(app.lbl_nuvem_estado.cget("text") == "Não conectado", "nuvem: começa não conectada")
 check(app._grp_nuvem_entrar.mapped and not app._grp_nuvem_conectado.mapped, "nuvem: mostra o formulário")
 check(app.ent_nuvem_senha._cfg.get("show") == "•", "nuvem: senha mascarada")
-check("nuvem" in app.nav, "nuvem: item no menu")
+check("nuvem" not in app.nav and "backup" not in app.nav and "nuvem" not in app.paginas, "nuvem/backup: sem item próprio no menu")
 copiado = []
 app.clipboard_clear = lambda: copiado.clear()
 app.clipboard_append = lambda t: copiado.append(t)
@@ -1311,12 +1311,12 @@ dlg._escolher("nuvem"); dlg._escolher("zero")
 check(escolhas == ["nuvem"], "assistente: a escolha vale uma vez só")
 app.prefs.primeiro_uso_concluido = False
 app._ao_escolher_inicio("nuvem")
-check(app.paginas["nuvem"].mapped and app.prefs.primeiro_uso_concluido, "assistente: 'já uso em outro computador' abre a Nuvem e conclui")
+check(app._aba_nuvem.mapped and app.prefs.primeiro_uso_concluido, "assistente: 'já uso em outro computador' abre a Nuvem e conclui")
 app._ao_escolher_inicio("zero")
 check(app.paginas["novo"].mapped, "assistente: 'começar do zero' abre o Novo registro")
 sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = externo
 app._ao_escolher_inicio("backup")
-check(app.paginas["backup"].mapped, "assistente: 'restaurar backup' abre a página Backup")
+check(app._aba_backup.mapped, "assistente: 'restaurar backup' abre a página Backup")
 sys.modules["tkinter.filedialog"].CAMINHO["abrir"] = ""
 app.prefs.primeiro_uso_concluido = False
 app._iniciar_primeiro_uso()
@@ -1438,6 +1438,7 @@ class _ClientePainel:
                 {"id": "u2", "email": "ana@x.com", "papel": "usuario", "ativo": True, "registros": 4,
                  "pendentes": 4, "atendidas": 0, "urgentes": 0, "criado_em": "2026-02-02T10:00:00Z",
                  "ultimo_acesso": "2026-11-10T12:00:00Z", "ultima_atividade": "2026-11-10T12:00:00Z"}]
+        if nome == "painel_criar_usuario": return "novo-id"
         if nome == "painel_listar_auditoria":
             return [{"quando": "2026-11-10T12:00:00Z", "admin_email": "eu@x.com",
                      "acao": "desativar_acesso", "alvo_email": "ana@x.com", "detalhe": None}]
@@ -1497,6 +1498,39 @@ for _ in range(300):
     _time.sleep(0.01)
 check(("painel_definir_papel", {"p_usuario": "u2", "p_papel": "admin"}) in chamadas,
       "painel: promover a administrador chama a função do servidor")
+
+
+# --- Novo usuário pelo painel -------------------------------------------------------------
+from anotacoes.interface import widgets as _w
+chamadas.clear()
+app._cliente_nuvem = lambda timeout=20: _ClientePainel("admin")
+check(app.btn_painel_novo._cfg.get("state") == "normal", "painel: botão Novo usuário disponível ao administrador")
+_w.DialogoNovoUsuario.perguntar = classmethod(lambda cls, pai, validar, gerar: None)
+app._novo_usuario()
+check(not chamadas, "painel: cancelar o novo usuário não chama o servidor")
+_w.DialogoNovoUsuario.perguntar = classmethod(lambda cls, pai, validar, gerar: {
+    "email": "nova@x.co", "senha": "SenhaForte123", "admin": True, "gerada": True})
+copiado.clear()
+app._novo_usuario()
+for _ in range(300):
+    if not app._painel_fila.empty(): app._sondar_painel(); break
+    _time.sleep(0.01)
+check(("painel_criar_usuario", {"p_email": "nova@x.co", "p_senha": "SenhaForte123", "p_papel": "admin"}) in chamadas,
+      "painel: novo usuário chama a função do servidor com e-mail, senha e papel")
+check(copiado and copiado[0] == "SenhaForte123" and "copiada" in app.toast._rotulo.cget("text"),
+      "painel: senha gerada vai para a área de transferência e o aviso diz isso")
+check(app._painel_papel == "admin", "painel: depois de criar, recarrega a lista")
+check(app._validar_novo_usuario("sem-arroba", "SenhaForte123") and app._validar_novo_usuario("a@b.co", "curta")
+      and app._validar_novo_usuario("a@b.co", "SenhaForte123") is None, "painel: validação do formulário de novo usuário")
+# a própria janela (campos, gerar senha, mostrar, confirmar)
+dlg = _w.DialogoNovoUsuario(app, app._validar_novo_usuario, lambda: "GeradaForte99")
+dlg.ent_email.insert(0, "ana@x.co"); dlg._confirmar()
+check(dlg.resultado is None and "senha" in dlg.lbl_erro.cget("text").lower(), "novo usuário (janela): senha vazia é recusada")
+dlg._gerar_senha()
+check(dlg.ent_senha.get() == "GeradaForte99" and dlg.ent_senha._cfg.get("show") == "", "novo usuário (janela): gerar preenche e mostra a senha")
+dlg.chk_admin.select(); dlg._confirmar()
+check(dlg.resultado == {"email": "ana@x.co", "senha": "GeradaForte99", "admin": True, "gerada": True},
+      "novo usuário (janela): devolve e-mail, senha, papel e se foi gerada")
 
 check(rodar_painel(_ClientePainel("admin", falhar=True)) and app._painel_papel is None
       and app.abas_painel._cfg.get("values") == [painel_gui.ABA_MEU] and not app._aba_admin.mapped,

@@ -14,6 +14,7 @@ biblioteca padrão do Python: não acrescenta dependências ao programa.
 import base64
 import json
 import re
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -85,6 +86,14 @@ def validar_senha(senha: str) -> Optional[str]:
     if not senha or len(senha) < MIN_SENHA:
         return f"Use uma senha com pelo menos {MIN_SENHA} caracteres."
     return None
+
+
+_ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+
+
+def gerar_senha(tamanho: int = 16) -> str:
+    """Senha aleatória forte (letras e números sem ambiguidade)."""
+    return "".join(secrets.choice(_ALFABETO) for _ in range(max(tamanho, MIN_SENHA)))
 
 
 # ----------------------------------------------------------------------

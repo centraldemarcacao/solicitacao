@@ -20,10 +20,10 @@ from datetime import datetime
 import customtkinter as ctk
 
 from anotacoes import theme as T
-from anotacoes.interface.widgets import (CartaoNumero, DialogoConfirmacao, Pilula,
+from anotacoes.interface.widgets import (CartaoNumero, DialogoConfirmacao, DialogoNovoUsuario, Pilula,
                                          TabelaRegistros, alinhar_esquerda, fonte)
 from anotacoes.nuvem import painel
-from anotacoes.nuvem.cliente import NuvemErro
+from anotacoes.nuvem.cliente import NuvemErro, gerar_senha, validar_email, validar_senha
 from anotacoes.nuvem.sql import SQL_PAINEL
 from anotacoes.nucleo.util import plural
 
@@ -194,8 +194,11 @@ class PainelMixin:
         self.btn_painel_atualizar = self._botao(
             barra, "Atualizar", self._painel_executar, width=110)
         self.btn_painel_atualizar.pack(side="left")
+        self.btn_painel_novo = self._botao(
+            barra, "Novo usuário", self._novo_usuario, destaque=True, width=130)
+        self.btn_painel_novo.pack(side="left", padx=(10, 0))
         self.btn_painel_acesso = self._botao(
-            barra, "Ativar / desativar acesso", self._alternar_acesso, destaque=True, width=190)
+            barra, "Ativar / desativar acesso", self._alternar_acesso, width=190)
         self.btn_painel_acesso.pack(side="left", padx=(10, 0))
         self.btn_painel_papel = self._botao(
             barra, "Alterar papel", self._alternar_papel, width=130)
@@ -271,6 +274,7 @@ class PainelMixin:
             self.btn_painel_acesso.configure(text="Ativar / desativar acesso")
             self.btn_painel_papel.configure(text="Alterar papel")
         self.btn_painel_atualizar.configure(state="disabled" if self._painel_rodando else "normal")
+        self.btn_painel_novo.configure(state="disabled" if self._painel_rodando else "normal")
 
     def _copiar_sql_painel(self) -> None:
         self.clipboard_clear()
@@ -279,6 +283,32 @@ class PainelMixin:
                            "sucesso", 6000)
 
     # --- Ações do administrador -----------------------------------------
+    @staticmethod
+    def _validar_novo_usuario(email: str, senha: str):
+        try:
+            validar_email(email)
+        except ValueError as exc:
+            return str(exc)
+        return validar_senha(senha)
+
+    def _novo_usuario(self) -> None:
+        if self._painel_papel != painel.PAPEL_ADMIN or self._painel_rodando:
+            return
+        dados = DialogoNovoUsuario.perguntar(self, self._validar_novo_usuario, gerar_senha)
+        if not dados:
+            return
+        papel = painel.PAPEL_ADMIN if dados["admin"] else painel.PAPEL_USUARIO
+        aviso = f"Usuário {dados['email']} criado."
+        if dados["gerada"]:
+            try:
+                self.clipboard_clear()
+                self.clipboard_append(dados["senha"])
+                aviso += " A senha gerada foi copiada: cole e entregue à pessoa."
+            except Exception:
+                log.debug("Não foi possível copiar a senha gerada", exc_info=True)
+        self._painel_executar(
+            lambda c: painel.criar_usuario(c, dados["email"], dados["senha"], papel), aviso)
+
     def _alternar_acesso(self) -> None:
         u = self._selecionado_painel()
         if u is None or self._eh_voce(u):

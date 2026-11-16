@@ -75,13 +75,12 @@ class NuvemMixin:
     # ==================================================================
     # Página
     # ==================================================================
-    def _criar_pagina_nuvem(self, pai) -> ctk.CTkFrame:
+    def _criar_pagina_nuvem(self, pai, incorporada: bool = False) -> ctk.CTkFrame:
+        """`incorporada`: é uma aba de Configurações (sem título nem cartão próprio)."""
         pagina = ctk.CTkFrame(pai, fg_color="transparent")
-        self._cabecalho(
-            pagina, "Nuvem",
+        card = self._corpo_pagina(
+            pagina, incorporada, "Nuvem",
             "Uma cópia dos registros no Supabase, sincronizada automaticamente.")
-        card = self._card(pagina)
-        card.pack(fill="both", expand=True, padx=34, pady=(0, 30))
 
         topo = ctk.CTkFrame(card, fg_color="transparent")
         topo.pack(fill="x", padx=24, pady=(22, 4))

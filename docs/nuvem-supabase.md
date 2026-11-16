@@ -1,6 +1,6 @@
 # Nuvem (Supabase)
 
-A página **Nuvem** mantém uma cópia dos registros num projeto Supabase (plano gratuito). O banco
+A aba **Nuvem** (em Configurações) mantém uma cópia dos registros num projeto Supabase (plano gratuito). O banco
 local continua sendo o principal: o programa funciona sem internet e envia o que ficou pendente
 depois.
 
@@ -20,7 +20,7 @@ depois.
 ## Configurar (uma vez por projeto)
 1. Crie um projeto no [Supabase](https://supabase.com) (de preferência na região São Paulo).
 2. **SQL Editor > New query**: cole o conteúdo de [`supabase/setup.sql`](../supabase/setup.sql)
-   (ou use o botão **Copiar SQL de configuração** da página Nuvem) e clique em **Run**.
+   (ou use o botão **Copiar SQL de configuração** da aba Nuvem) e clique em **Run**.
 3. Crie o usuário do programa: pelo painel (**Authentication > Users > Add user > Create new user**,
    marcando **Auto Confirm User**) ou, sem abrir o painel, pelo script de administrador
    (veja [Criar usuários sem abrir o painel](#criar-usuários-sem-abrir-o-painel)). Use um usuário
@@ -29,7 +29,7 @@ depois.
    *Settings > Data API*.
 5. **Chave**: *Settings > API Keys > Publishable key* (`sb_publishable_...`).
    **Nunca** use a *Secret key* / `service_role` (o programa a recusa).
-6. No programa: **Menu > Nuvem**, preencha URL, chave, e-mail e senha e clique em
+6. No programa: **Configurações > aba Nuvem**, preencha URL, chave, e-mail e senha e clique em
    **Conectar e sincronizar**.
 
 Para conferir, abra *Table Editor > `solicitacoes_registros`* no Supabase.
@@ -46,7 +46,7 @@ Para conferir, abra *Table Editor > `solicitacoes_registros`* no Supabase.
 ## Bom saber
 * Projetos gratuitos pausam após 1 semana sem uso: reative em **Restore project** no painel.
 * O plano gratuito não inclui backup diário na nuvem; os backups locais continuam essenciais.
-* Restaurar um backup (página Backup) passa a valer também na nuvem; registros que só existiam
+* Restaurar um backup (Configurações > aba Backup) passa a valer também na nuvem; registros que só existiam
   lá não voltam sozinhos.
 * **Desconectar** não apaga nada. Para apagar a cópia, use o painel do Supabase.
 
@@ -81,7 +81,7 @@ O menu **Painel** tem duas abas:
    **Sem terminal (pelo GitHub):** em Settings > Secrets and variables > Actions, crie o segredo
    `SUPABASE_SERVICE_KEY` com a chave secreta; depois, em Actions > *Definir papel na nuvem* > Run workflow,
    informe o e-mail e o papel. **Sem GitHub:** no SQL Editor, rode o `update` comentado no fim do `painel.sql`.
-3. Novos usuários (sem terminal): Supabase > Authentication > Users > Add user > Create new user, marcando *Auto Confirm User*. Pelo terminal: `python scripts/usuarios_nuvem.py criar EMAIL --gerar-senha [--admin]`.
+3. Novos usuários (sem terminal): no programa, **Painel > Administração > Novo usuário** (e-mail, senha ou *Gerar senha forte*, e a opção Administrador). A conta nasce confirmada e pode entrar na hora. Se preferir, Supabase > Authentication > Users > Add user (marque *Auto Confirm User*). Pelo terminal: `python scripts/usuarios_nuvem.py criar EMAIL --gerar-senha [--admin]`.
 
 **Como é protegido:** o papel fica em `app_metadata` (o usuário não consegue alterar); cada função do painel
 confere o papel no banco a cada chamada; visitantes (`anon`) não executam nada; o programa nunca recebe a chave
@@ -119,7 +119,7 @@ python scripts/usuarios_nuvem.py senha medico@hospital.org
   registros dele na nuvem.
 
 ### Botão "Criar conta" (desligado por padrão)
-A página Nuvem pode mostrar um botão **Criar conta** (cria a conta com o e-mail e a senha digitados,
+A aba Nuvem pode mostrar um botão **Criar conta** (cria a conta com o e-mail e a senha digitados,
 mínimo de 8 caracteres). Ele vem **desligado**: `PERMITIR_CADASTRO = False` em
 `anotacoes/nuvem/projeto.py`.
 

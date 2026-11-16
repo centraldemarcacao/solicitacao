@@ -102,6 +102,24 @@ class TestPainelNuvem(unittest.TestCase):
         with self.assertRaises(NuvemErro):
             painel.definir_papel(c, "u1", "root")
 
+    def test_criar_usuario(self):
+        c, fake, p = _cliente({"painel_criar_usuario": "novo-id"})
+        self.addCleanup(p.stop)
+        self.assertEqual(painel.criar_usuario(c, "  Ana@X.co ", "SenhaForte123", "admin"), "novo-id")
+        self.assertEqual(fake.chamadas[-1][2], {"p_email": "Ana@X.co", "p_senha": "SenhaForte123", "p_papel": "admin"})
+        n = len(fake.chamadas)
+        for email, senha, papel in (("sem-arroba", "SenhaForte123", "usuario"),
+                                    ("a@b.co", "curta", "usuario"), ("a@b.co", "SenhaForte123", "root")):
+            with self.assertRaises(NuvemErro):
+                painel.criar_usuario(c, email, senha, papel)
+        self.assertEqual(len(fake.chamadas), n)          # nada inválido sai do computador
+
+    def test_gerar_senha_fica_no_cliente(self):
+        a, b = cliente.gerar_senha(), cliente.gerar_senha()
+        self.assertEqual(len(a), 16)
+        self.assertNotEqual(a, b)
+        self.assertIsNone(cliente.validar_senha(a))
+
     def test_erro_do_servidor_sobe(self):
         c, _f, p = _cliente({"painel_listar_usuarios": cliente._erro_http(403, {"code": "PT403"})})
         self.addCleanup(p.stop)
@@ -113,6 +131,8 @@ class TestPainelNuvem(unittest.TestCase):
         self.assertEqual(painel.descrever_acao(a), "adm@x.co alterou o papel de b@x.co (Administrador)")
         a = painel.AcaoAuditoria("-", "adm@x.co", "desativar_acesso", "b@x.co", "")
         self.assertIn("desativou o acesso de b@x.co", painel.descrever_acao(a))
+        a = painel.AcaoAuditoria("-", "adm@x.co", "criar_usuario", "n@x.co", "usuario")
+        self.assertEqual(painel.descrever_acao(a), "adm@x.co criou a conta de n@x.co (Usuário)")
         self.assertEqual(painel.formatar_data(None), "-")
         self.assertEqual(painel.formatar_data("nada"), "-")
         self.assertRegex(painel.formatar_data("2026-11-08T12:00:00.5Z"), r"^\d\d/\d\d/2026 \d\d:\d\d$")
@@ -178,7 +198,8 @@ class TestSqlDoPainel(unittest.TestCase):
             self.assertNotIn(proibido, codigo)
         # o papel vem de app_metadata (só o servidor altera), nunca de user_metadata
         self.assertIn("raw_app_meta_data", sql)
-        self.assertNotIn("raw_user_meta_data", sql)
+        self.assertNotIn("raw_user_meta_data ->", sql)      # nunca LÊ o papel de user_metadata
+        self.assertIn("public.painel_criar_usuario(text, text, text) from public, anon", sql)
 
 
 if __name__ == "__main__":

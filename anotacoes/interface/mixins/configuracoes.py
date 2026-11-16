@@ -21,7 +21,7 @@ from anotacoes.interface.icons import icone
 from anotacoes.interface.widgets import alinhar_esquerda, fonte
 from anotacoes.nucleo import certificados, diagnostico, inicializacao, seguranca
 
-ABAS = ("Segurança", "Diagnóstico")
+ABAS = ("Segurança", "Backup", "Nuvem", "Diagnóstico")
 ROTULOS_BLOQUEIO = {m: (f"{m} minuto" if m == 1 else f"{m} minutos")
                     for m in seguranca.OPCOES_BLOQUEIO}
 _ICONE_ESTADO = {diagnostico.OK: ("check_circle", "VERDE"), diagnostico.AVISO: ("warning", "AMBAR"),
@@ -39,7 +39,7 @@ class ConfiguracoesMixin:
     def _criar_pagina_config(self, pai) -> ctk.CTkFrame:
         pagina = ctk.CTkFrame(pai, fg_color="transparent")
         self._cabecalho(pagina, "Configurações",
-                        "Segurança dos dados e diagnóstico do programa.")
+                        "Segurança, backup, nuvem e diagnóstico do programa.")
         card = self._card(pagina)
         card.pack(fill="both", expand=True, padx=34, pady=(0, 30))
         self._fila_diag = queue.Queue()
@@ -57,15 +57,24 @@ class ConfiguracoesMixin:
         self._aba_diagnostico = ctk.CTkFrame(card, fg_color="transparent")
         self._montar_aba_seguranca(self._aba_seguranca)
         self._montar_aba_diagnostico(self._aba_diagnostico)
+        self._aba_backup = self._criar_pagina_backup(card, incorporada=True)
+        self._aba_nuvem = self._criar_pagina_nuvem(card, incorporada=True)
+        self._abas_config = {"Segurança": self._aba_seguranca, "Backup": self._aba_backup,
+                             "Nuvem": self._aba_nuvem, "Diagnóstico": self._aba_diagnostico}
         self._aba_seguranca.pack(fill="both", expand=True, padx=24, pady=(0, 18))
         return pagina
 
     def _trocar_aba_config(self, aba: str) -> None:
-        self._aba_seguranca.pack_forget()
-        self._aba_diagnostico.pack_forget()
-        alvo = self._aba_seguranca if aba == ABAS[0] else self._aba_diagnostico
-        alvo.pack(fill="both", expand=True, padx=24, pady=(0, 18))
+        for quadro in self._abas_config.values():
+            quadro.pack_forget()
+        self._abas_config.get(aba, self._aba_seguranca).pack(
+            fill="both", expand=True, padx=24, pady=(0, 18))
         self.atualizar_config()
+
+    def abrir_aba_config(self, aba: str) -> None:
+        """Seleciona uma aba de Configurações (usado pelos atalhos de Backup e Nuvem)."""
+        self.abas_config.set(aba)
+        self._trocar_aba_config(aba)
 
     def atualizar_config(self) -> None:
         """Atualiza os dados mostrados nas duas abas (chamado ao abrir a página)."""
@@ -74,6 +83,11 @@ class ConfiguracoesMixin:
         try:
             self._atualizar_aba_seguranca()
             self._atualizar_aba_diagnostico()
+            aba = self.abas_config.get()
+            if aba == "Backup":
+                self.atualizar_backups()
+            elif aba == "Nuvem":
+                self.atualizar_nuvem()
         except Exception:
             pass   # a página pode estar sendo recriada (troca de tema)
 

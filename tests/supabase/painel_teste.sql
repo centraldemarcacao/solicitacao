@@ -97,4 +97,40 @@ set role authenticated; set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000
 do $$ begin assert public.painel_meu_papel() = 'usuario', 'admin desativado não pode continuar admin'; end $$;
 select pg_temp.esperar_erro('select * from public.painel_listar_usuarios()', 'PT403');
 reset role;
+
+-- criar usuário pelo painel --------------------------------------------------------------
+set role authenticated; set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000002';   -- maria (admin)
+select public.painel_criar_usuario('  Novo@Hospital.ORG ', 'SenhaForte123', 'usuario') as novo_id \gset
+do $$ begin
+    assert (select count(*) from public.painel_listar_usuarios() where email = 'novo@hospital.org' and papel = 'usuario' and ativo) = 1,
+        'usuário criado deveria aparecer na lista, em minúsculas';
+    assert (select detalhe from public.painel_listar_auditoria(1)) = 'usuario', 'auditoria da criação';
+    assert (select acao from public.painel_listar_auditoria(1)) = 'criar_usuario';
+end $$;
+select public.painel_criar_usuario('chefe@hospital.org', 'OutraSenha456', 'admin');
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('novo@hospital.org', 'SenhaForte123')$q$, 'PT400');   -- duplicado
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('NOVO@hospital.org', 'SenhaForte123')$q$, 'PT400');   -- duplicado (maiúsculas)
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('sem-arroba', 'SenhaForte123')$q$, 'PT400');
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('a b@x.co', 'SenhaForte123')$q$, 'PT400');
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('curta@x.co', '1234567')$q$, 'PT400');
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('longa@x.co', repeat('a', 73))$q$, 'PT400');
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('papel@x.co', 'SenhaForte123', 'root')$q$, 'PT400');
+reset role;
+do $$ begin
+    -- senha só como hash bcrypt, conferível com crypt(); identidade criada; papel em app_metadata
+    assert (select encrypted_password from auth.users where email = 'novo@hospital.org') like '$2a$%', 'hash bcrypt';
+    assert (select encrypted_password = extensions.crypt('SenhaForte123', encrypted_password) from auth.users where email = 'novo@hospital.org');
+    assert (select count(*) from auth.identities i join auth.users u on u.id = i.user_id where u.email = 'novo@hospital.org' and i.provider = 'email') = 1;
+    assert (select email_confirmed_at is not null and aud = 'authenticated' from auth.users where email = 'novo@hospital.org');
+    assert (select raw_app_meta_data ->> 'role' from auth.users where email = 'chefe@hospital.org') = 'admin';
+    assert not exists (select 1 from auth.users where email in ('curta@x.co', 'longa@x.co', 'papel@x.co')), 'nada criado nos erros';
+end $$;
+-- quem não é admin e visitantes não conseguem criar contas
+set role authenticated; set request.jwt.claim.sub = 'cccccccc-0000-0000-0000-000000000003';   -- joão (usuário comum)
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('invasor@x.co', 'SenhaForte123')$q$, 'PT403');
+reset role;
+set role anon;
+select pg_temp.esperar_erro($q$select public.painel_criar_usuario('invasor@x.co', 'SenhaForte123')$q$, '42501');
+reset role;
+do $$ begin assert not exists (select 1 from auth.users where email = 'invasor@x.co'); end $$;
 select 'TODOS OS CENARIOS DO PAINEL PASSARAM' as resultado;

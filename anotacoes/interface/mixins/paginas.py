@@ -318,14 +318,12 @@ class PaginasExtrasMixin:
     # ==================================================================
     # Página: Backup
     # ==================================================================
-    def _criar_pagina_backup(self, pai) -> ctk.CTkFrame:
+    def _criar_pagina_backup(self, pai, incorporada: bool = False) -> ctk.CTkFrame:
+        """`incorporada`: é uma aba de Configurações (sem título nem cartão próprio)."""
         pagina = ctk.CTkFrame(pai, fg_color="transparent")
-        self._cabecalho(
-            pagina, "Backup",
-            "Cópias de segurança dos seus registros, criadas automaticamente.",
-        )
-        card = self._card(pagina)
-        card.pack(fill="both", expand=True, padx=34, pady=(0, 30))
+        card = self._corpo_pagina(
+            pagina, incorporada, "Backup",
+            "Cópias de segurança dos seus registros, criadas automaticamente.")
 
         barra = ctk.CTkFrame(card, fg_color="transparent")
         barra.pack(fill="x", padx=22, pady=(20, 14))

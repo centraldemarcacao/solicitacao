@@ -3,7 +3,7 @@ projeto.py
 ----------
 Projeto Supabase usado por TODOS os computadores. Preencha as duas linhas abaixo UMA vez
 (no GitHub: abra este arquivo > lápis > cole os valores > Commit). Com as duas preenchidas,
-a página Nuvem mostra só E-mail e Senha.
+a aba Nuvem (em Configurações) mostra só E-mail e Senha.
 
   URL_PROJETO   -> Supabase > Project Settings > API > Project URL
   CHAVE_PUBLICA -> Supabase > Project Settings > API Keys > anon / publishable
@@ -12,7 +12,7 @@ a página Nuvem mostra só E-mail e Senha.
 
 Deixe vazio para voltar a pedir endereço e chave na tela.
 
-  PERMITIR_CADASTRO -> mostra o botão "Criar conta" na página Nuvem. Deixe False (padrão):
+  PERMITIR_CADASTRO -> mostra o botão "Criar conta" na aba Nuvem (em Configurações). Deixe False (padrão):
                        este arquivo é público, então a chave NÃO protege nada, e o que
                        impede cadastros de terceiros é o Supabase com "Allow new users to
                        sign up" DESLIGADO. Para criar usuários use o administrador:

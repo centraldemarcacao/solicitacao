@@ -91,8 +91,8 @@ PAG_RESUMO = "resumo"
 PAG_NOVO = "novo"
 PAG_HIST = "historico"
 PAG_LIXO = "lixeira"
-PAG_BACKUP = "backup"
-PAG_NUVEM = "nuvem"
+PAG_BACKUP = "backup"       # sem página própria: é uma aba de Configurações
+PAG_NUVEM = "nuvem"         # idem
 PAG_PAINEL = "painel"
 PAG_CONFIG = "config"       # sem item no menu: abre pela engrenagem do rodapé (Ctrl + ,)
 
@@ -486,12 +486,10 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         self.nav = {}
         for chave, texto, nome_icone in (
             (PAG_RESUMO, "Resumo do dia", "clipboard"),
-            (PAG_PAINEL, "Painel", "grid"),
             (PAG_NOVO, "Novo registro", "plus"),
             (PAG_HIST, "Histórico", "list"),
             (PAG_LIXO, "Lixeira", "trash"),
-            (PAG_BACKUP, "Backup", "database"),
-            (PAG_NUVEM, "Nuvem", "cloud"),
+            (PAG_PAINEL, "Painel", "grid"),
         ):
             item = ItemNavegacao(barra, texto, nome_icone,
                                  lambda c=chave: self.mostrar_pagina(c))
@@ -621,14 +619,16 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             PAG_NOVO: self._criar_pagina_novo(self.area),
             PAG_HIST: self._criar_pagina_historico(self.area),
             PAG_LIXO: self._criar_pagina_lixeira(self.area),
-            PAG_BACKUP: self._criar_pagina_backup(self.area),
-            PAG_NUVEM: self._criar_pagina_nuvem(self.area),
             PAG_PAINEL: self._criar_pagina_painel(self.area),
             PAG_CONFIG: self._criar_pagina_config(self.area),
         }
         self.toast = Notificacao(self.area)
 
     def mostrar_pagina(self, chave: str) -> None:
+        if chave in (PAG_BACKUP, PAG_NUVEM):      # agora são abas de Configurações
+            self.mostrar_pagina(PAG_CONFIG)
+            self.abrir_aba_config("Backup" if chave == PAG_BACKUP else "Nuvem")
+            return
         for k, pagina in self.paginas.items():
             if k == chave:
                 pagina.pack(fill="both", expand=True)
@@ -642,10 +642,6 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.atualizar_historico()
         elif chave == PAG_LIXO:
             self.atualizar_lixeira()
-        elif chave == PAG_BACKUP:
-            self.atualizar_backups()
-        elif chave == PAG_NUVEM:
-            self.atualizar_nuvem()
         elif chave == PAG_PAINEL:
             self.abrir_painel()
         elif chave == PAG_CONFIG:
@@ -659,6 +655,17 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             pai, fg_color=T.CARD, corner_radius=16,
             border_width=1, border_color=T.BORDA,
         )
+
+    def _corpo_pagina(self, pagina, incorporada: bool, titulo: str, subtitulo: str):
+        """Corpo de uma página: título + cartão; dentro de uma aba, só o espaço de trabalho."""
+        if incorporada:
+            corpo = ctk.CTkFrame(pagina, fg_color="transparent")
+            corpo.pack(fill="both", expand=True)
+            return corpo
+        self._cabecalho(pagina, titulo, subtitulo)
+        card = self._card(pagina)
+        card.pack(fill="both", expand=True, padx=34, pady=(0, 30))
+        return card
 
     @staticmethod
     def _cabecalho(pai, titulo: str, subtitulo: str) -> None:

@@ -80,7 +80,7 @@ def testar_supabase(url: Optional[str], chave: Optional[str], timeout: float = 8
         ms = int((time.monotonic() - inicio) * 1000)
         if exc.code in (401, 403):
             return Resultado(nome, AVISO, "O servidor respondeu, mas recusou a chave. "
-                             "Confira a chave na página Nuvem.", ms)
+                             "Confira a chave na aba Nuvem (em Configurações).", ms)
         return Resultado(nome, ERRO, f"O servidor respondeu com erro {exc.code}.", ms)
     except Exception as exc:
         return Resultado(nome, ERRO, _explicar_falha(exc), int((time.monotonic() - inicio) * 1000))

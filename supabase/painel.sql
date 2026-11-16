@@ -154,6 +154,60 @@ begin
 end;
 $$;
 
+create or replace function public.painel_criar_usuario(
+    p_email text, p_senha text, p_papel text default 'usuario')
+returns uuid
+language plpgsql volatile security definer set search_path = ''
+as $$
+declare
+    v_email       text := lower(btrim(coalesce(p_email, '')));
+    v_id          uuid := gen_random_uuid();
+    v_admin_email text;
+begin
+    perform public.painel_exigir_admin();
+    if v_email !~ '^[^@ ]+@[^@ ]+[.][^@ ]+$' then
+        raise exception 'E-mail inválido.' using errcode = 'PT400';
+    end if;
+    if length(coalesce(p_senha, '')) < 8 then
+        raise exception 'A senha precisa ter pelo menos 8 caracteres.' using errcode = 'PT400';
+    end if;
+    if length(p_senha) > 72 then
+        raise exception 'A senha pode ter no máximo 72 caracteres.' using errcode = 'PT400';
+    end if;
+    if p_papel not in ('admin', 'usuario') then
+        raise exception 'Papel inválido.' using errcode = 'PT400';
+    end if;
+    if exists (select 1 from auth.users u where lower(u.email) = v_email) then
+        raise exception 'Já existe uma conta com este e-mail.' using errcode = 'PT400';
+    end if;
+
+    -- Conta já confirmada (não depende de e-mail nem do cadastro aberto). A senha é guardada
+    -- só como hash (bcrypt), no mesmo formato do Supabase Auth.
+    insert into auth.users (
+        instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+        raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+        confirmation_token, recovery_token, email_change_token_new, email_change)
+    values (
+        '00000000-0000-0000-0000-000000000000', v_id, 'authenticated', 'authenticated', v_email,
+        extensions.crypt(p_senha, extensions.gen_salt('bf')), now(),
+        jsonb_build_object('provider', 'email', 'providers', jsonb_build_array('email'),
+                           'role', p_papel),
+        '{}'::jsonb, now(), now(), '', '', '', '');
+    insert into auth.identities (
+        id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+    values (
+        gen_random_uuid(), v_id, v_id::text,
+        jsonb_build_object('sub', v_id::text, 'email', v_email, 'email_verified', true,
+                           'phone_verified', false),
+        'email', now(), now(), now());
+
+    select email into v_admin_email from auth.users where id = (select auth.uid());
+    insert into public.painel_auditoria (admin_id, admin_email, acao, alvo_id, alvo_email, detalhe)
+    values ((select auth.uid()), v_admin_email, 'criar_usuario', v_id, v_email, p_papel);
+    return v_id;
+end;
+$$;
+
 create or replace function public.painel_listar_auditoria(p_limite integer default 20)
 returns table (quando timestamptz, admin_email text, acao text, alvo_email text, detalhe text)
 language plpgsql stable security definer set search_path = ''
@@ -177,6 +231,7 @@ revoke all on function public.painel_exigir_admin()                 from public,
 revoke all on function public.painel_listar_usuarios()              from public, anon;
 revoke all on function public.painel_definir_acesso(uuid, boolean)  from public, anon;
 revoke all on function public.painel_definir_papel(uuid, text)      from public, anon;
+revoke all on function public.painel_criar_usuario(text, text, text) from public, anon;
 revoke all on function public.painel_listar_auditoria(integer)      from public, anon;
 
 grant execute on function public.painel_eh_admin()                     to authenticated;
@@ -185,6 +240,7 @@ grant execute on function public.painel_exigir_admin()                 to authen
 grant execute on function public.painel_listar_usuarios()              to authenticated;
 grant execute on function public.painel_definir_acesso(uuid, boolean)  to authenticated;
 grant execute on function public.painel_definir_papel(uuid, text)      to authenticated;
+grant execute on function public.painel_criar_usuario(text, text, text) to authenticated;
 grant execute on function public.painel_listar_auditoria(integer)      to authenticated;
 
 -- Para o PostgREST enxergar as funções novas sem esperar:

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from anotacoes.nuvem.cliente import ClienteSupabase, NuvemErro
+from anotacoes.nuvem.cliente import ClienteSupabase, NuvemErro, validar_email, validar_senha
 from anotacoes.nuvem.sincronizacao import da_nuvem
 
 PAPEL_ADMIN = "admin"
@@ -23,6 +23,7 @@ _ACOES = {
     "ativar_acesso": "ativou o acesso de",
     "desativar_acesso": "desativou o acesso de",
     "definir_papel": "alterou o papel de",
+    "criar_usuario": "criou a conta de",
 }
 
 
@@ -124,6 +125,21 @@ def definir_papel(cliente: ClienteSupabase, usuario_id: str, papel: str) -> None
     cliente.rpc("painel_definir_papel", {"p_usuario": usuario_id, "p_papel": papel})
 
 
+def criar_usuario(cliente: ClienteSupabase, email: str, senha: str, papel: str = PAPEL_USUARIO) -> str:
+    """Cria uma conta já confirmada (função do servidor; só administradores). Devolve o id."""
+    try:
+        email = validar_email(email)
+    except ValueError as exc:
+        raise NuvemErro(str(exc)) from None
+    erro = validar_senha(senha)
+    if erro:
+        raise NuvemErro(erro)
+    if papel not in ROTULO_PAPEL:
+        raise NuvemErro("Papel inválido.")
+    return str(cliente.rpc("painel_criar_usuario",
+                           {"p_email": email, "p_senha": senha, "p_papel": papel}) or "")
+
+
 def listar_auditoria(cliente: ClienteSupabase, limite: int = 20) -> List[AcaoAuditoria]:
     itens = []
     for a in _lista(cliente.rpc("painel_listar_auditoria", {"p_limite": int(limite)})):
@@ -138,5 +154,6 @@ def listar_auditoria(cliente: ClienteSupabase, limite: int = 20) -> List[AcaoAud
 def descrever_acao(a: AcaoAuditoria) -> str:
     """'admin@x ativou o acesso de fulano@y' (papel novo entre parênteses)."""
     verbo = _ACOES.get(a.acao, a.acao or "executou uma ação em")
-    extra = f" ({ROTULO_PAPEL.get(a.detalhe, a.detalhe)})" if a.acao == "definir_papel" and a.detalhe else ""
+    extra = (f" ({ROTULO_PAPEL.get(a.detalhe, a.detalhe)})"
+             if a.acao in ("definir_papel", "criar_usuario") and a.detalhe else "")
     return f"{a.admin_email or 'Alguém'} {verbo} {a.alvo_email or '-'}{extra}"

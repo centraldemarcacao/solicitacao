@@ -473,6 +473,110 @@ class DialogoConfirmacao(ctk.CTkToplevel):
         return dialogo.resultado
 
 
+class DialogoNovoUsuario(ctk.CTkToplevel):
+    """Janela modal para criar uma conta: e-mail, senha (ou gerar) e papel.
+
+    Use `DialogoNovoUsuario.perguntar(pai, validar, gerar_senha)`: devolve None (cancelou) ou
+    {"email", "senha", "admin", "gerada"}. `validar(email, senha)` devolve a mensagem de erro
+    ou None; `gerar_senha()` devolve uma senha forte.
+    """
+
+    def __init__(self, pai, validar, gerar_senha) -> None:
+        super().__init__(pai, fg_color=T.CARD)
+        self.resultado = None
+        self._validar, self._gerar = validar, gerar_senha
+        self._gerada = False
+        self.title("Novo usuário")
+        self.resizable(False, False)
+        centralizar(self, pai, 500, 520)
+
+        ctk.CTkFrame(self, fg_color=T.TEAL, height=6, corner_radius=0).pack(fill="x")
+        corpo = ctk.CTkFrame(self, fg_color="transparent")
+        corpo.pack(fill="both", expand=True, padx=30, pady=(22, 6))
+        ctk.CTkLabel(corpo, text="Novo usuário", font=fonte(20, "bold"),
+                     text_color=T.TEXTO, anchor="w").pack(anchor="w")
+        alinhar_esquerda(ctk.CTkLabel(
+            corpo, text="A conta nasce já confirmada e pode entrar na hora. Entregue a senha à "
+                        "pessoa por um meio seguro; ela não é guardada em lugar nenhum.",
+            font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w", wraplength=440,
+        )).pack(anchor="w", pady=(4, 12))
+
+        def campo(texto, dica, mascarar=False):
+            ctk.CTkLabel(corpo, text=texto, font=fonte(13, "bold"), text_color=T.TEXTO,
+                         anchor="w").pack(anchor="w", pady=(6, 2))
+            entrada = ctk.CTkEntry(
+                corpo, height=42, font=fonte(14), placeholder_text=dica,
+                placeholder_text_color=T.PLACEHOLDER, corner_radius=10, border_width=2,
+                border_color=T.BORDA, fg_color=T.SUPERFICIE, text_color=T.TEXTO,
+                show="•" if mascarar else "")
+            entrada.pack(fill="x")
+            return entrada
+
+        self.ent_email = campo("E-mail", "pessoa@hospital.org")
+        self.ent_senha = campo("Senha (mínimo 8 caracteres)", "Digite ou clique em Gerar", True)
+        linha = ctk.CTkFrame(corpo, fg_color="transparent")
+        linha.pack(fill="x", pady=(8, 0))
+        ctk.CTkButton(
+            linha, text="Gerar senha forte", width=150, height=34, font=fonte(12, "bold"),
+            fg_color="transparent", text_color=T.TEAL, border_width=2, border_color=T.TEAL,
+            hover_color=T.TEAL_CLARO, command=self._gerar_senha).pack(side="left")
+        self.chk_mostrar = ctk.CTkCheckBox(
+            linha, text="Mostrar senha", font=fonte(12), text_color=T.TEXTO,
+            fg_color=T.TEAL, hover_color=T.TEAL_ESCURO, border_color=T.BORDA_FORTE,
+            checkmark_color=T.SOBRE_COR, checkbox_width=20, checkbox_height=20,
+            corner_radius=5, border_width=2, command=self._alternar_mostrar)
+        self.chk_mostrar.pack(side="right")
+        self.chk_admin = ctk.CTkCheckBox(
+            corpo, text="Administrador (vê e gerencia todas as contas)", font=fonte(13),
+            text_color=T.TEXTO, fg_color=T.AMBAR, hover_color=T.AMBAR,
+            border_color=T.BORDA_FORTE, checkmark_color=T.SOBRE_COR,
+            checkbox_width=22, checkbox_height=22, corner_radius=6, border_width=2)
+        self.chk_admin.pack(anchor="w", pady=(14, 0))
+        self.lbl_erro = ctk.CTkLabel(corpo, text="", height=22, font=fonte(12, "bold"),
+                                     text_color=T.VERMELHO, anchor="w", wraplength=440)
+        self.lbl_erro.pack(fill="x", pady=(8, 0))
+
+        botoes = ctk.CTkFrame(self, fg_color="transparent")
+        botoes.pack(fill="x", padx=30, pady=(6, 24))
+        ctk.CTkButton(
+            botoes, text="Criar usuário", width=150, height=42, font=fonte(14, "bold"),
+            fg_color=T.TEAL, hover_color=T.TEAL_ESCURO, text_color=T.SOBRE_COR,
+            command=self._confirmar).pack(side="right")
+        ctk.CTkButton(
+            botoes, text="Cancelar", width=120, height=42, font=fonte(14, "bold"),
+            fg_color="transparent", text_color=T.TEXTO, border_width=2,
+            border_color=T.BORDA_FORTE, hover_color=T.FUNDO, command=self.destroy,
+        ).pack(side="right", padx=(0, 12))
+        tornar_modal(self, pai, foco=self.ent_email)
+        self.bind("<Return>", lambda _e: self._confirmar())
+
+    def _gerar_senha(self) -> None:
+        self.ent_senha.delete(0, "end")
+        self.ent_senha.insert(0, self._gerar())
+        self._gerada = True
+        self.chk_mostrar.select()
+        self._alternar_mostrar()
+
+    def _alternar_mostrar(self) -> None:
+        self.ent_senha.configure(show="" if self.chk_mostrar.get() else "•")
+
+    def _confirmar(self) -> None:
+        email, senha = self.ent_email.get().strip(), self.ent_senha.get()
+        erro = self._validar(email, senha)
+        if erro:
+            self.lbl_erro.configure(text=erro)
+            return
+        self.resultado = {"email": email, "senha": senha, "admin": bool(self.chk_admin.get()),
+                          "gerada": self._gerada}
+        self.destroy()
+
+    @classmethod
+    def perguntar(cls, pai, validar, gerar_senha):
+        dialogo = cls(pai, validar, gerar_senha)
+        pai.wait_window(dialogo)
+        return dialogo.resultado
+
+
 # ----------------------------------------------------------------------
 # Menu suspenso (clique direito e botão Exportar)
 # ----------------------------------------------------------------------

@@ -89,9 +89,24 @@ def main() -> int:
     processar(app)
     assert app.btn_painel_acesso.cget("text") == "Ativar acesso"
     passo("painel: aba Administração e seleção de conta")
+    from anotacoes.interface.widgets import DialogoNovoUsuario
+    dlg = DialogoNovoUsuario(app, app._validar_novo_usuario, lambda: "GeradaForte99")
+    processar(app)
+    dlg._gerar_senha()
+    dlg.ent_email.insert(0, "ana@x.com")
+    dlg._confirmar()
+    processar(app)
+    assert dlg.resultado and dlg.resultado["senha"] == "GeradaForte99"
+    passo("painel: janela Novo usuário")
     app._painel_papel = None
     app._aplicar_papel()
     app.mostrar_pagina("novo")
+
+    for atalho, aba in (("backup", "_aba_backup"), ("nuvem", "_aba_nuvem")):
+        app.mostrar_pagina(atalho)
+        processar(app)
+        assert getattr(app, aba).winfo_ismapped(), f"aba {atalho} em Configurações não apareceu"
+        passo(f"Configurações > aba '{atalho}' aparece")
 
     app.mostrar_pagina("config")
     app.atualizar_config()

@@ -4,6 +4,9 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Menu reorganizado**: *Painel* passa a ser o último item (abaixo de Lixeira); **Backup** e **Nuvem** agora são abas
+  dentro de **Configurações**. **Novo usuário** no Painel (Administração): cria a conta já confirmada pelo servidor
+  (função `painel_criar_usuario`, só administradores, senha guardada como hash, ação auditada), com *Gerar senha forte*.
 * **Painel de controle** (menu *Painel*), com dois acessos: **Meu painel** (todo usuário: só os próprios números,
   cartões, % atendidas e gráfico dos últimos 14 dias, calculados no computador) e **Administração** (só
   administradores: contas da nuvem, ativar/desativar acesso, promover/rebaixar papel, totais por usuário e

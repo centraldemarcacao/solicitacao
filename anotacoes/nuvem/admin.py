@@ -22,25 +22,16 @@ import base64
 import getpass
 import json
 import os
-import secrets
 from typing import Callable, List, Optional
 
 from anotacoes.nuvem import projeto
-from anotacoes.nuvem.cliente import (MIN_SENHA, ClienteSupabase, NuvemErro, normalizar_url,
+from anotacoes.nuvem.cliente import (MIN_SENHA, ClienteSupabase, NuvemErro, gerar_senha, normalizar_url,
                                      validar_email, validar_senha)
 
 VARIAVEL_CHAVE = "SUPABASE_SERVICE_KEY"
 VARIAVEL_URL = "SUPABASE_URL"
 POR_PAGINA = 100
 # sem caracteres parecidos (0/O, 1/l/I) para ser fácil de ler e digitar
-_ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
-
-
-def gerar_senha(tamanho: int = 16) -> str:
-    """Senha aleatória forte (letras e números sem ambiguidade)."""
-    return "".join(secrets.choice(_ALFABETO) for _ in range(max(tamanho, MIN_SENHA)))
-
-
 def _papel_jwt(chave: str) -> Optional[str]:
     try:
         carga = chave.split(".")[1]
