@@ -1,0 +1,41 @@
+name: Definir papel na nuvem
+
+# Executado À MÃO (Actions > "Definir papel na nuvem" > Run workflow).
+# Define se uma conta existente é "admin" ou "usuario", sem abrir terminal.
+# Usa o segredo SUPABASE_SERVICE_KEY (Settings > Secrets and variables > Actions).
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "E-mail da conta (já criada no Supabase)"
+        required: true
+        type: string
+      papel:
+        description: "Papel"
+        required: true
+        type: choice
+        options: [admin, usuario]
+
+permissions:
+  contents: read
+
+jobs:
+  papel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Definir papel
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          EMAIL: ${{ inputs.email }}
+          PAPEL: ${{ inputs.papel }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_KEY" ]; then
+            echo "Falta o segredo SUPABASE_SERVICE_KEY (Settings > Secrets and variables > Actions)."; exit 1
+          fi
+          echo "::add-mask::$EMAIL"
+          python scripts/usuarios_nuvem.py papel "$EMAIL" "$PAPEL"
