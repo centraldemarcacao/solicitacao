@@ -173,6 +173,56 @@ class CaixaBusca(ctk.CTkFrame):
         return self.entry.get().strip()
 
 
+class FluxoBotoes(ctk.CTkFrame):
+    """Botões lado a lado que quebram de linha sozinhos conforme a largura disponível
+    (ao ampliar ou encolher a janela, eles se reorganizam). `ao_mudar_linhas()` é chamado
+    quando a quantidade de linhas muda."""
+
+    def __init__(self, pai, espaco: int = 6, ao_mudar_linhas=None) -> None:
+        super().__init__(pai, fg_color="transparent")
+        self._itens = []
+        self._espaco = espaco
+        self._largura = 0
+        self._linhas = 0
+        self._ao_mudar = ao_mudar_linhas
+        self.bind("<Configure>", self._configurou)
+
+    def adicionar(self, botao) -> None:
+        self._itens.append(botao)
+        self._reordenar(self._largura)
+
+    def _configurou(self, evento) -> None:
+        if evento.width != self._largura:
+            self._largura = evento.width
+            self._reordenar(self._largura)
+
+    def _reordenar(self, largura: int) -> None:
+        """Distribui os itens em linhas que cabem em `largura` pixels (0 = ainda não medida)."""
+        linha = coluna = usado = 0
+        escala = 1.0
+        try:
+            escala = float(self._get_widget_scaling())
+        except Exception:
+            log.debug("Escala do widget indisponível", exc_info=True)
+        folga = round(self._espaco * escala)
+        for botao in self._itens:
+            try:
+                tamanho = int(botao.winfo_reqwidth())
+            except Exception:
+                tamanho = round(int(botao.cget("width") or 100) * escala)
+            if largura > 1 and coluna and usado + tamanho > largura:
+                linha, coluna, usado = linha + 1, 0, 0
+            botao.grid(row=linha, column=coluna, padx=(0, self._espaco),
+                       pady=(0, self._espaco), sticky="w")
+            coluna += 1
+            usado += tamanho + folga
+        total = linha + 1 if self._itens else 0
+        if total != self._linhas:
+            self._linhas = total
+            if self._ao_mudar:
+                self._ao_mudar()
+
+
 class Pilula(ctk.CTkFrame):
     """Etiqueta arredondada com texto (ex.: 'Pendente')."""
 

@@ -32,7 +32,7 @@ METODOS_OK = {
     "pack", "pack_forget", "pack_propagate", "grid", "grid_forget", "grid_propagate",
     "grid_columnconfigure", "grid_rowconfigure", "place", "place_forget", "lift",
     "focus_set", "focus_force", "bind", "after", "after_cancel", "destroy",
-    "winfo_children", "winfo_ismapped", "winfo_width", "winfo_height", "winfo_rootx",
+    "winfo_children", "winfo_ismapped", "winfo_width", "winfo_reqwidth", "winfo_height", "winfo_rootx",
     "winfo_rooty", "winfo_fpixels", "update_idletasks", "title", "geometry",
     "minsize", "resizable", "iconbitmap", "transient", "grab_set", "grab_release",
     "wait_window", "mainloop", "configure", "config", "cget", "_get_window_scaling",
@@ -67,7 +67,7 @@ class Widget:
         self.mapped = True; self.pack_kw = kw
     def pack_forget(self): self.mapped = False
     def pack_propagate(self, v=True): pass
-    def grid(self, **kw): self.mapped = True
+    def grid(self, **kw): self.mapped = True; self.grid_kw = kw
     def grid_forget(self): self.mapped = False
     def grid_propagate(self, v=True): pass
     def grid_columnconfigure(self, i, **kw): pass
@@ -93,6 +93,7 @@ class Widget:
     def winfo_children(self): return list(self.kids)
     def winfo_ismapped(self): return self.mapped
     def winfo_exists(self): return not self.dead
+    def winfo_reqwidth(self): return int(self._cfg.get("width") or 100)
     def winfo_width(self): return 1200
     def winfo_height(self): return 800
     def winfo_rootx(self): return 0
@@ -201,6 +202,7 @@ class CTkImage:
         assert light_image is not None and len(size) == 2
 class CTkFont:
     def __init__(self, family=None, size=None, weight=None, **kw): pass
+    def measure(self, texto): return 7 * len(texto)
 
 ctk = types.ModuleType("customtkinter")
 for nome, obj in list(globals().items()):
@@ -1299,6 +1301,34 @@ app.txt_desc.text = "x" * (gui.MAX_DESCRICAO - 2)
 app._usar_modelo("Solicita água.")
 check("passaria" in app.toast._rotulo.cget("text"), "modelo: avisa quando passa do limite")
 check(app.txt_desc.text == "x" * (gui.MAX_DESCRICAO - 2), "modelo: texto intacto quando não cabe")
+# balões: compactos, padronizados e sem o rótulo "Modelos:"
+_chips = app._fluxo_modelos._itens
+check(len(_chips) == len(_mod_regras.padrao()) + 1 and _chips[-1].cget("text") == "Editar",
+      "modelos: um balão por modelo e o balão 'Editar' no fim")
+check({c.cget("height") for c in _chips} == {modelos_gui.ALTURA_CHIP} and modelos_gui.ALTURA_CHIP <= 28,
+      "modelos: todos os balões têm a mesma altura, compacta")
+check(all(c.cget("width") == max(48, 7 * len(c.cget("text")) + modelos_gui.MARGEM_CHIP) for c in _chips[:-1]),
+      "modelos: largura = texto + margem pequena (e não os 140 fixos de antes)")
+check(len({c.cget("width") for c in _chips[:-1]}) > 1, "modelos: a largura acompanha o texto de cada balão")
+_todos_textos = [t for t in textos(app.paginas["novo"]) if t]
+check("Modelos:" not in _todos_textos and "Editar modelos" not in _todos_textos, "modelos: sem o rótulo 'Modelos:' (só os balões)")
+# adaptação à largura da janela
+_fl = widgets.FluxoBotoes(app._frm_modelos)
+_bs = [ctk.CTkButton(_fl, text=f"M{i}", width=100) for i in range(6)]
+for _b in _bs: _fl._itens.append(_b)
+_fl._reordenar(700)
+check({b.grid_kw["row"] for b in _bs} == {0}, "balões: janela larga = uma só linha")
+_fl._reordenar(350)
+check([b.grid_kw["row"] for b in _bs] == [0, 0, 0, 1, 1, 1], "balões: janela estreita quebra em duas linhas")
+_fl._reordenar(150)
+check([b.grid_kw["row"] for b in _bs] == [0, 1, 2, 3, 4, 5], "balões: janela muito estreita = um por linha (nenhum some)")
+_fl._reordenar(700)
+check({b.grid_kw["row"] for b in _bs} == {0}, "balões: ao ampliar, voltam para uma linha")
+_avisos = []
+_fl2 = widgets.FluxoBotoes(app._frm_modelos, ao_mudar_linhas=lambda: _avisos.append(1))
+for i in range(4): _fl2.adicionar(ctk.CTkButton(_fl2, text=f"N{i}", width=100))
+_n0 = len(_avisos); _fl2._reordenar(210)
+check(len(_avisos) > _n0, "balões: avisa quando a quantidade de linhas muda (para reajustar a altura mínima)")
 app.txt_desc.delete("1.0", "end")
 salvos = []
 dlg = modelos_gui.DialogoModelos(app, _mod_regras.padrao(), lambda lista: salvos.append(lista))

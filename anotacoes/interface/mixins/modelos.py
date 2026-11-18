@@ -1,7 +1,7 @@
 """
 modelos.py
 ----------
-Modelos de descrição no formulário "Novo registro": botões com frases prontas e a janela
+Modelos de descrição no formulário "Novo registro": balões compactos com frases prontas e a janela
 para editá-los. Regras em nucleo/modelos.py.
 
 Requer em App: self.prefs, self.txt_desc, self.toast, self._texto, self._atualizar_contador,
@@ -12,13 +12,16 @@ import logging
 import customtkinter as ctk
 
 from anotacoes import theme as T
-from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
+from anotacoes.interface.icons import icone
+from anotacoes.interface.widgets import FluxoBotoes, alinhar_esquerda, centralizar, fonte
 from anotacoes.nucleo import modelos as regras
 from anotacoes.nucleo.database import MAX_DESCRICAO
 
 log = logging.getLogger(__name__)
 
-POR_LINHA = 4
+ALTURA_CHIP = 26         # balões dos modelos: compactos e todos do mesmo tamanho
+FONTE_CHIP = 12
+MARGEM_CHIP = 28         # espaço lateral dentro do balão (somado à largura do texto)
 
 
 class DialogoModelos(ctk.CTkToplevel):
@@ -145,26 +148,43 @@ class DialogoModelos(ctk.CTkToplevel):
 
 
 class ModelosMixin:
+    @staticmethod
+    def _largura_texto(texto: str, peso: str = "bold") -> int:
+        """Largura (em unidades lógicas) do texto na fonte dos balões."""
+        try:
+            return int(fonte(FONTE_CHIP, peso).measure(texto))
+        except Exception:
+            log.debug("Não foi possível medir o texto do balão", exc_info=True)
+            return len(texto) * 8
+
     def _montar_modelos(self) -> None:
-        """(Re)cria os botões de modelo dentro de self._frm_modelos."""
+        """(Re)cria os balões de modelo dentro de self._frm_modelos: uma só faixa de balões
+        compactos, que quebra de linha conforme a largura da janela."""
         for filho in self._frm_modelos.winfo_children():
             filho.destroy()
-        modelos = self.prefs.modelos_descricao
-        ctk.CTkLabel(self._frm_modelos, text="Modelos:", font=fonte(12, "bold"),
-                     text_color=T.TEXTO_SUAVE).pack(anchor="w")
-        for inicio in range(0, len(modelos), POR_LINHA):
-            linha = ctk.CTkFrame(self._frm_modelos, fg_color="transparent")
-            linha.pack(fill="x", pady=(3, 0))
-            for m in modelos[inicio:inicio + POR_LINHA]:
-                ctk.CTkButton(
-                    linha, text=m["titulo"], height=30, corner_radius=15, font=fonte(12, "bold"),
-                    fg_color=T.TEAL_CLARO, text_color=T.TEAL_ESCURO, hover_color=T.BORDA,
-                    command=lambda t=m["texto"]: self._usar_modelo(t),
-                ).pack(side="left", padx=(0, 6))
-        ctk.CTkButton(
-            self._frm_modelos, text="Editar modelos", height=26, width=120, font=fonte(12),
-            fg_color="transparent", text_color=T.TEXTO_SUAVE, hover_color=T.FUNDO,
-            command=self.gerenciar_modelos).pack(anchor="w", pady=(2, 0))
+        fluxo = FluxoBotoes(self._frm_modelos, espaco=6, ao_mudar_linhas=self._linhas_de_modelos_mudaram)
+        fluxo.pack(fill="x")
+        self._fluxo_modelos = fluxo
+        for m in self.prefs.modelos_descricao:
+            fluxo.adicionar(ctk.CTkButton(
+                fluxo, text=m["titulo"], height=ALTURA_CHIP, corner_radius=ALTURA_CHIP // 2,
+                width=max(48, self._largura_texto(m["titulo"]) + MARGEM_CHIP),
+                font=fonte(FONTE_CHIP, "bold"), fg_color=T.TEAL_CLARO, text_color=T.TEAL_ESCURO,
+                hover_color=T.TEAL_BORDA, border_width=1, border_color=T.TEAL_BORDA,
+                command=lambda t=m["texto"]: self._usar_modelo(t)))
+        fluxo.adicionar(ctk.CTkButton(
+            fluxo, text="Editar", height=ALTURA_CHIP, corner_radius=ALTURA_CHIP // 2,
+            width=self._largura_texto("Editar", "normal") + MARGEM_CHIP + 16,
+            image=icone("edit", T.TEXTO_SUAVE, 14), compound="left",
+            font=fonte(FONTE_CHIP), fg_color="transparent", text_color=T.TEXTO_SUAVE,
+            hover_color=T.FUNDO, border_width=1, border_color=T.BORDA_FORTE,
+            command=self.gerenciar_modelos))
+
+    def _linhas_de_modelos_mudaram(self) -> None:
+        """Mais ou menos linhas de balões mudam a altura do formulário: reconfere o mínimo."""
+        ajustar = getattr(self, "_garantir_altura_do_formulario", None)
+        if ajustar is not None:
+            self.after(60, ajustar)
 
     def _usar_modelo(self, texto: str) -> None:
         novo = regras.texto_com_modelo(self._texto(self.txt_desc), texto, MAX_DESCRICAO)

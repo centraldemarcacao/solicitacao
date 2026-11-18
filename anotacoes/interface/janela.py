@@ -765,7 +765,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         )
         self.lbl_contador.pack(side="right")
         self._frm_modelos = ctk.CTkFrame(f, fg_color="transparent")
-        self._frm_modelos.pack(fill="x", pady=(4, 0))
+        self._frm_modelos.pack(fill="x", pady=(6, 0))
         self._montar_modelos()
 
         # Botões e erro da descrição ficam presos à base do cartão: em janelas

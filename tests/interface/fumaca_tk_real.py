@@ -83,6 +83,22 @@ def main() -> int:
     assert app.txt_desc.winfo_ismapped()
     passo("Novo registro: descrição visível na menor janela")
 
+    # Modelos: balões compactos que se reorganizam conforme a largura
+    fluxo = app._fluxo_modelos
+    chips = fluxo._itens
+    processar(app)
+    assert len({c.winfo_reqheight() for c in chips}) == 1, "balões com alturas diferentes"
+    fluxo._reordenar(10_000)
+    processar(app)
+    assert {int(c.grid_info()["row"]) for c in chips} == {0}, "janela larga deveria ter uma só linha"
+    fluxo._reordenar(1)
+    fluxo._reordenar(120)
+    processar(app)
+    assert max(int(c.grid_info()["row"]) for c in chips) >= 1, "janela estreita deveria quebrar linhas"
+    assert all(c.winfo_ismapped() for c in chips), "algum balão sumiu"
+    fluxo._reordenar(10_000)
+    passo("Modelos: balões quebram e voltam conforme a largura")
+
     # Painel: aba de administração com dados de mentira (sem rede)
     from anotacoes.nuvem import painel as _pn
     app.mostrar_pagina("painel")

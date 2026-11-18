@@ -4,6 +4,9 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Modelos de descrição mais discretos**: os balões ficaram menores (altura 26, largura conforme o texto), todos do
+  mesmo tamanho e com o mesmo estilo; o rótulo "Modelos:" saiu; "Editar modelos" virou um balão "Editar" com lápis no
+  fim da fileira. Os balões se reorganizam sozinhos ao ampliar ou encolher a janela (quebram de linha e voltam).
 * **Projeto mais enxuto** (sem mudar o comportamento): menos arquivos. A regra do assistente de primeiro uso foi
   para `nucleo/preferencias.py`; o administrador de usuários roda com `python -m anotacoes.nuvem.admin` (o
   `scripts/usuarios_nuvem.py` deixou de existir); os guias de personalização, segurança e `assets/README.md` viraram
