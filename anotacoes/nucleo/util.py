@@ -32,6 +32,14 @@ def data_curta(valor) -> str:
         return valor or ""
 
 
+SEM_NOME = "Sem nome"
+
+
+def exibir_nome(nome) -> str:
+    """O nome é opcional: registros sem nome aparecem como 'Sem nome'."""
+    return (nome or "").strip() or SEM_NOME
+
+
 def resumir(texto: str, limite: int) -> str:
     """Junta quebras de linha e corta com reticências."""
     texto = " ".join((texto or "").split())

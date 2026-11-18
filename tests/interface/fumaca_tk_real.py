@@ -73,6 +73,16 @@ def main() -> int:
         assert app.paginas[chave].winfo_ismapped(), f"página {chave} não apareceu"
         passo(f"página '{chave}' aparece")
 
+    # Novo registro: com a janela no menor tamanho permitido, a caixa da descrição continua visível
+    app.mostrar_pagina("novo")
+    processar(app)
+    mw, mh = app.wm_minsize()
+    app.geometry(f"{mw}x{mh}")
+    processar(app)
+    assert app.txt_desc.winfo_height() >= 60, f"caixa da descrição sumiu ({app.txt_desc.winfo_height()} px)"
+    assert app.txt_desc.winfo_ismapped()
+    passo("Novo registro: descrição visível na menor janela")
+
     # Painel: aba de administração com dados de mentira (sem rede)
     from anotacoes.nuvem import painel as _pn
     app.mostrar_pagina("painel")

@@ -222,12 +222,17 @@ class ConfiguracoesMixin:
         if not caminho:
             return
         try:
-            certificados.importar_certificado(caminho, os.path.dirname(self.db.caminho))
+            _destino, novos, total = certificados.importar_certificado_detalhe(
+                caminho, os.path.dirname(self.db.caminho))
         except ValueError as exc:
-            self.toast.mostrar(str(exc), "erro", 6000)
+            self.toast.mostrar(str(exc), "erro", 7000)
             return
-        self.toast.mostrar("Certificado importado. Clique em \"Testar conexão\" para conferir.",
-                           "sucesso", 5000)
+        if novos:
+            texto = (f"Certificado adicionado ({total} na lista). "
+                     "Clique em \"Testar conexão\" para conferir.")
+        else:
+            texto = f"Esse certificado já estava na lista ({total}). Nada foi alterado."
+        self.toast.mostrar(texto, "sucesso", 5500)
 
     # --- Teste de conexão (em segundo plano) -------------------------------------
     def testar_conexoes(self) -> None:

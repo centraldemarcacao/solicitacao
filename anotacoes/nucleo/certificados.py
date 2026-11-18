@@ -18,8 +18,10 @@ trocam o certificado), o resultado é o erro
 A verificação nunca é desligada: o programa baixa um executável.
 """
 
+import base64
 import logging
 import os
+import re
 import ssl
 from typing import List, Optional
 
@@ -44,33 +46,85 @@ def pastas_ca_extra() -> List[str]:
     return pastas
 
 
-def importar_certificado(origem: str, pasta_destino: str) -> str:
-    """Valida um certificado (.pem/.crt/.cer, texto ou binário) e o salva como
-    `ca-extra.pem` em `pasta_destino`. Devolve o caminho gravado. ValueError se o
-    arquivo não for um certificado."""
+_BLOCO_PEM = re.compile(
+    r"-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----", re.S)
+
+
+def _ler_certificados(bruto: bytes) -> List[bytes]:
+    """Certificados (em DER) de um arquivo: PEM com um ou vários, ou um DER binário."""
+    texto = None
+    for codificacao in ("utf-8-sig", "utf-16"):
+        try:
+            candidato = bruto.decode(codificacao)
+        except UnicodeError:
+            continue
+        if "-----BEGIN CERTIFICATE-----" in candidato:
+            texto = candidato
+            break
+    if texto is not None:
+        ders = []
+        for corpo in _BLOCO_PEM.findall(texto):
+            try:
+                ders.append(base64.b64decode("".join(corpo.split()), validate=True))
+            except ValueError:
+                raise ValueError("O arquivo tem um certificado danificado. "
+                                 "Exporte-o de novo.") from None
+        return ders
+    if b"-----BEGIN PKCS7-----" in bruto or b"-----BEGIN CMS-----" in bruto:
+        raise ValueError("O arquivo está no formato PKCS#7. Exporte de novo escolhendo "
+                         "\"ASCII codificado na Base64, certificado único\" (.cer/.crt/.pem).")
+    return [bruto]          # tenta como DER binário
+
+
+def certificados_importados(pasta: str) -> List[bytes]:
+    """Certificados (DER) já guardados em `pasta/ca-extra.pem` (lista vazia se não houver)."""
+    try:
+        with open(os.path.join(pasta, NOME_CA_EXTRA), "rb") as arq:
+            return _ler_certificados(arq.read(5_000_000))
+    except (OSError, ValueError):
+        return []
+
+
+def importar_certificado_detalhe(origem: str, pasta_destino: str):
+    """Como `importar_certificado`, mas devolve (caminho, novos, total).
+
+    Os certificados já importados são MANTIDOS: cada importação acrescenta (sem repetir) ao
+    arquivo `ca-extra.pem`. Assim GitHub e Supabase, que usam raízes diferentes, convivem.
+    """
     try:
         with open(origem, "rb") as arq:
             bruto = arq.read(2_000_000)
     except OSError as exc:
         raise ValueError(f"Não foi possível ler o arquivo: {exc}") from None
-    if b"-----BEGIN CERTIFICATE-----" in bruto:
-        pem = bruto.decode("ascii", "ignore")
-    else:
+    novos_der = _ler_certificados(bruto)
+    for der in novos_der:
         try:
-            pem = ssl.DER_cert_to_PEM_cert(bruto)
-        except Exception:
-            raise ValueError("O arquivo não parece ser um certificado "
-                             "(use o formato .pem, .crt ou .cer).") from None
-    try:
-        ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT).load_verify_locations(cadata=pem)
-    except ssl.SSLError:
-        raise ValueError("O arquivo não contém um certificado válido.") from None
+            ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT).load_verify_locations(
+                cadata=ssl.DER_cert_to_PEM_cert(der))
+        except (ssl.SSLError, ValueError):
+            raise ValueError("O arquivo não contém um certificado válido. Exporte-o de novo "
+                             "escolhendo \"ASCII codificado na Base64, certificado único\".") from None
+    if not novos_der:
+        raise ValueError("O arquivo não parece ser um certificado "
+                         "(use o formato .pem, .crt ou .cer).")
+    existentes = certificados_importados(pasta_destino)
+    todos = list(existentes)
+    for der in novos_der:
+        if der not in todos:
+            todos.append(der)
     os.makedirs(pasta_destino, exist_ok=True)
     destino = os.path.join(pasta_destino, NOME_CA_EXTRA)
-    with open(destino + ".tmp", "w", encoding="ascii") as arq:
-        arq.write(pem)
+    with open(destino + ".tmp", "w", encoding="ascii", newline="\n") as arq:
+        arq.write("".join(ssl.DER_cert_to_PEM_cert(der) for der in todos))
     os.replace(destino + ".tmp", destino)
-    return destino
+    return destino, len(todos) - len(existentes), len(todos)
+
+
+def importar_certificado(origem: str, pasta_destino: str) -> str:
+    """Valida um certificado (.pem/.crt/.cer, texto ou binário) e o ACRESCENTA a
+    `ca-extra.pem` em `pasta_destino`. Devolve o caminho gravado. ValueError se o arquivo
+    não for um certificado."""
+    return importar_certificado_detalhe(origem, pasta_destino)[0]
 
 
 def _carregar_repositorio_windows(contexto: ssl.SSLContext) -> None:

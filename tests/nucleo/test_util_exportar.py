@@ -71,3 +71,17 @@ class TestExportar(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNomeOpcional(unittest.TestCase):
+    def test_exibir_nome(self):
+        from anotacoes.nucleo.util import SEM_NOME, exibir_nome
+        self.assertEqual(exibir_nome(""), SEM_NOME)
+        self.assertEqual(exibir_nome("   "), SEM_NOME)
+        self.assertEqual(exibir_nome(None), SEM_NOME)
+        self.assertEqual(exibir_nome(" Ana "), "Ana")
+
+    def test_exportacao_mostra_sem_nome(self):
+        from anotacoes.nucleo import exportar
+        reg = (1, "2026-11-01 08:00:00", "", "ramal 9", "texto", "Pendente", None, "Normal")
+        self.assertEqual(exportar._linha(reg)[2], "Sem nome")

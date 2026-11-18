@@ -4,6 +4,15 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Novo registro**: **Contato** passa a ser obrigatório (no cadastro e na edição) e **Nome** passa a ser opcional;
+  registros sem nome aparecem como "Sem nome" (histórico, lixeira, resumo, detalhes e exportações). A caixa
+  **Descrição da solicitação** nunca mais some ao diminuir a janela: o programa mede a altura que o formulário
+  precisa e não deixa a janela ficar mais baixa que isso. Registros antigos sem contato continuam válidos
+  (só passam a exigir contato se forem editados).
+* **Certificados da rede acumulam**: *Importar certificado da rede* agora ACRESCENTA ao `ca-extra.pem` em vez de
+  substituir (GitHub e Supabase podem precisar de raízes diferentes), ignora repetidos, aceita arquivos com vários
+  certificados e as codificações comuns do Chrome/Windows (CRLF, BOM, UTF-16, binário DER) e explica melhor o erro
+  (ex.: arquivo PKCS#7). Mostra quantos certificados há na lista.
 * **Menu reorganizado**: *Painel* passa a ser o último item (abaixo de Lixeira); **Backup** e **Nuvem** agora são abas
   dentro de **Configurações**. **Novo usuário** no Painel (Administração): cria a conta já confirmada pelo servidor
   (função `painel_criar_usuario`, só administradores, senha guardada como hash, ação auditada), com *Gerar senha forte*.

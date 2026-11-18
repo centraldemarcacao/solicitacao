@@ -13,7 +13,7 @@ from datetime import datetime
 
 from anotacoes import theme as T
 from anotacoes.nucleo.identidade import titulo_completo
-from anotacoes.nucleo.util import formatar_data, formatar_lembrete, plural
+from anotacoes.nucleo.util import exibir_nome, formatar_data, formatar_lembrete, plural
 
 CABECALHO = ("Nº", "Data/Hora", "Nome", "Contato", "Descrição", "Status", "Retorno",
              "Prioridade")
@@ -21,7 +21,7 @@ CABECALHO = ("Nº", "Data/Hora", "Nome", "Contato", "Descrição", "Status", "Re
 
 def _linha(reg) -> tuple:
     rid, data_hora, nome, contato, descricao, status, lembrete, prioridade = reg
-    return (rid, formatar_data(data_hora), nome, contato or "", descricao,
+    return (rid, formatar_data(data_hora), exibir_nome(nome), contato or "", descricao,
             status, formatar_lembrete(lembrete), prioridade)
 
 

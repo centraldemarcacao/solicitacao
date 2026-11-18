@@ -16,6 +16,7 @@ from anotacoes.interface.icons import icone
 from anotacoes.nucleo.util import (
     DIAS,
     MESES,
+    exibir_nome,
     formatar_lembrete,
     plural,
     resumir,
@@ -154,7 +155,7 @@ class ResumoMixin:
             textos = ctk.CTkFrame(linha, fg_color="transparent")
             textos.pack(side="left", fill="x", expand=True)
             alinhar_esquerda(ctk.CTkLabel(
-                textos, text=resumir(nome, 40), font=fonte(14, "bold"),
+                textos, text=resumir(exibir_nome(nome), 40), font=fonte(14, "bold"),
                 text_color=T.TEXTO, anchor="w")).pack(anchor="w")
             alinhar_esquerda(ctk.CTkLabel(
                 textos,

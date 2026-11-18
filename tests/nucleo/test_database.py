@@ -37,9 +37,15 @@ class TestDatabase(unittest.TestCase):
 
     def test_validacao_campos_vazios(self):
         with self.assertRaises(ValueError):
-            self.db.inserir("   ", "x", "desc")
-        with self.assertRaises(ValueError):
             self.db.inserir("João", "x", "")
+        with self.assertRaises(ValueError):
+            self.db.inserir("João", "x", "   ")
+
+    def test_nome_e_opcional(self):
+        rid = self.db.inserir("   ", "ramal 1", "sem nome informado")
+        self.assertEqual(self.db.obter(rid)[2], "")
+        self.assertTrue(self.db.atualizar(rid, "", "ramal 2", "ainda sem nome"))
+        self.assertEqual(self.db.obter(rid)[3], "ramal 2")
 
     def test_validacao_tamanho_maximo(self):
         with self.assertRaises(ValueError):
@@ -184,8 +190,6 @@ class TestDatabase(unittest.TestCase):
     def test_atualizar_valida_campos(self):
         rid = self.db.inserir("Ana", "", "x")
         with self.assertRaises(ValueError):
-            self.db.atualizar(rid, "   ", "", "x")
-        with self.assertRaises(ValueError):
             self.db.atualizar(rid, "Ana", "", "")
         with self.assertRaises(ValueError):
             self.db.atualizar(rid, "A" * (MAX_NOME + 1), "", "x")
@@ -199,7 +203,10 @@ class TestDatabase(unittest.TestCase):
 
     def test_validar_campos(self):
         self.assertEqual(validar_campos("Ana", "", "x"), {})
-        self.assertEqual(set(validar_campos("", "", "")), {"nome", "descricao"})
+        self.assertEqual(set(validar_campos("", "", "")), {"descricao"})          # nome é opcional
+        self.assertEqual(set(validar_campos("", "", "", exigir_contato=True)), {"contato", "descricao"})
+        self.assertEqual(validar_campos("", "ramal", "x", exigir_contato=True), {})
+        self.assertEqual(validar_campos("Ana", "", "x", exigir_contato=True), {"contato": "Informe o contato."})
         self.assertEqual(set(validar_campos("Ana", "c" * 81, "x")), {"contato"})
 
     # ---------------- lixeira ----------------

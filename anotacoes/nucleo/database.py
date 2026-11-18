@@ -168,17 +168,19 @@ def _escapar_like(texto: str) -> str:
     return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def validar_campos(nome: str, contato: str, descricao: str) -> dict:
+def validar_campos(nome: str, contato: str, descricao: str, exigir_contato: bool = False) -> dict:
     """Valida os campos de um registro. Retorna {campo: mensagem} (vazio = ok).
 
+    O nome é opcional. `exigir_contato=True` (formulários de novo registro e de edição) torna o
+    contato obrigatório; o banco continua aceitando registros antigos ou sincronizados sem contato.
     Os campos esperados já devem vir sem espaços nas pontas.
     """
     erros = {}
-    if not nome:
-        erros["nome"] = "Informe o nome."
-    elif len(nome) > MAX_NOME:
+    if len(nome) > MAX_NOME:
         erros["nome"] = f"Use no máximo {MAX_NOME} caracteres."
-    if len(contato) > MAX_CONTATO:
+    if exigir_contato and not contato:
+        erros["contato"] = "Informe o contato."
+    elif len(contato) > MAX_CONTATO:
         erros["contato"] = f"Use no máximo {MAX_CONTATO} caracteres."
     if not descricao:
         erros["descricao"] = "Descreva a solicitação."

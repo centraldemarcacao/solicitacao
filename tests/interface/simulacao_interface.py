@@ -298,15 +298,17 @@ check(app.paginas["novo"].mapped and not app.paginas["historico"].mapped, "pági
 
 # Validação: campos vazios
 app.salvar_registro()
-check(app.err_nome.cget("text") == "Informe o nome.", "erro inline do nome")
+check(app.err_contato.cget("text") == "Informe o contato." and app.err_nome.cget("text") == "",
+      "contato é obrigatório e o nome não")
 check(app.err_desc.cget("text") == "Descreva a solicitação.", "erro inline da descrição")
 check("obrigatórios" in app.toast._rotulo.cget("text"), "aviso 'Preencha os campos obrigatórios.'")
 check(app.db.listar() == [], "nada gravado com campos vazios")
 
 # Digitar limpa o erro
+app.ent_contato.text = "Ramal 2045"
+app._digitando(app.ent_contato)
+check(app.err_contato.cget("text") == "", "digitar remove o erro do contato")
 app.ent_nome.text = "Maria da Silva"
-app._digitando(app.ent_nome)
-check(app.err_nome.cget("text") == "", "digitar remove o erro do nome")
 
 # Salvar válido
 app.ent_contato.text = "Ramal 2045"
@@ -319,11 +321,41 @@ check(app.res_hoje.cget("text") == "1" and app.res_pend.cget("text") == "1", "re
 check(len(app.lista_recentes.winfo_children()) == 1, "lista 'Últimos registros' com 1 item")
 
 # Limite de tamanho
+app.ent_contato.text = "1000"
 app.ent_nome.text = "A" * 121
 app.txt_desc.text = "x"
 app.salvar_registro()
 check("120" in app.err_nome.cget("text") and len(app.db.listar()) == 1, "nome acima do limite é rejeitado")
 app.limpar_formulario()
+
+# Nome opcional / contato obrigatório / altura mínima da janela
+app.limpar_formulario()
+app.ent_nome.text, app.ent_contato.text, app.txt_desc.text = "Fulano", "", "tem nome, falta contato"
+n_antes = len(app.db.listar())
+app.salvar_registro()
+check(app.err_contato.cget("text") == "Informe o contato." and len(app.db.listar()) == n_antes,
+      "sem contato o registro não é salvo (mesmo com nome)")
+check("obrigatórios" in app.toast._rotulo.cget("text"), "aviso de campos obrigatórios quando falta o contato")
+app.limpar_formulario()
+app.ent_nome.text, app.ent_contato.text, app.txt_desc.text = "", "(84) 99999-0000", "sem nome informado"
+app.salvar_registro()
+sem_nome = [r for r in app.db.listar() if r[2] == ""]
+check(len(sem_nome) == 1 and "sucesso" in app.toast._rotulo.cget("text"), "registro sem nome é salvo")
+app.mostrar_pagina("historico")
+check(any(v["values"][2] == "Sem nome" for v in app.tabela.tree.rows.values()), "histórico mostra 'Sem nome' quando não há nome")
+app.db.excluir(sem_nome[0][0]); app.db.apagar_definitivamente([sem_nome[0][0]])
+app.mostrar_pagina("novo")
+from anotacoes.interface import janela as _jan
+registrado = []
+app.minsize = lambda w, h: registrado.append((w, h))
+app.paginas["novo"].winfo_reqheight = lambda: 1000
+app.winfo_screenheight = lambda: 2000
+app._garantir_altura_do_formulario()
+check(registrado and registrado[-1][1] >= 1000 / app._get_window_scaling() - 1,
+      "altura mínima da janela sobe para caber o formulário (a descrição não some)")
+app.paginas["novo"].winfo_reqheight = lambda: 100
+app._garantir_altura_do_formulario()
+check(registrado[-1][1] == _jan.MINIMO_ALTURA, "formulário baixo: mantém o mínimo padrão")
 
 # Mais registros e navegação
 for n, c, d in (("José Souza", "9999-0000", "Troca de leito"), ("Ana Lima", "ana@x.com", "Dúvida sobre visita")):
@@ -384,7 +416,7 @@ check("lixeira" in app.toast._rotulo.cget("text"), "toast de exclusão (lixeira)
 # --- Seleção: cor única por linha, suave e sem conflito com a cor do status ---
 app.limpar_formulario()
 for n in ("Carlos", "Dora", "Elisa"):
-    app.ent_nome.text, app.txt_desc.text = n, "x"
+    app.ent_contato.text, app.ent_nome.text, app.txt_desc.text = "1000", n, "x"
     app.salvar_registro()
 app.mostrar_pagina("historico")
 ids = list(app.tabela.tree.get_children())
@@ -412,10 +444,10 @@ def textos(w, acc=None):
     for k in w.kids: textos(k, acc)
     return acc
 tf = textos(app.paginas["novo"])
-check("Contato" in tf and "Nome *" in tf, "rótulos do formulário: 'Contato' e 'Nome *'")
+check("Contato *" in tf and "Nome" in tf and "Nome *" not in tf, "rótulos do formulário: 'Contato *' (obrigatório) e 'Nome' (opcional)")
 check(not any("paciente" in t.lower() and "Nome" in t for t in tf), "'Nome do paciente' não existe mais no formulário")
 check(not any("ramal" in t.lower() or "e-mail" in t.lower() or "(" in t and "Contato" in t for t in tf if t.startswith("Contato")), "rótulo de contato sem parênteses")
-check(tf.index("Contato") < tf.index("Nome *") < tf.index("Descrição da solicitação *"), "ordem: Contato, Nome, Descrição")
+check(tf.index("Contato *") < tf.index("Nome") < tf.index("Descrição da solicitação *"), "ordem: Contato, Nome, Descrição")
 check(app.ent_contato._cfg["placeholder_text"] == "Ex.: (84) 99999-0000", "dica do contato só com telefone")
 base_ids = {r[0] for r in app.db.listar()}
 hoje, amanha = date.today(), date.today() + timedelta(days=1)
@@ -1402,6 +1434,29 @@ check(esperar(app3) and eventos["cadastro"] == ("nova@solicitacao.local", "Senha
 nuvem_gui.ClienteSupabase, nuvem_gui.testar_conexao, nuvem_gui.sincronizar = _orig_cli2, _orig_tc2, _orig_sinc2
 RESP["v"] = True
 _projeto_mod.PERMITIR_CADASTRO = False
+
+# --- Importar certificado da rede: acumula (GitHub + Supabase) ----------------------------
+import ssl as _ssl, tempfile as _tf, os as _os
+_cert_a = _os.path.join(_tf.mkdtemp(), "a.pem")
+_cert_b = _os.path.join(_tf.mkdtemp(), "b.cer")
+from tests.nucleo.test_certificados_acumular import SECTIGO_E46, _raiz_de_teste
+open(_cert_a, "w", newline="").write(SECTIGO_E46)
+open(_cert_b, "wb").write(_raiz_de_teste("Raiz do Supabase"))
+_fd = sys.modules["tkinter.filedialog"]
+_pasta_ca = _os.path.dirname(app.db.caminho)
+for _extra in (_os.path.join(_pasta_ca, "ca-extra.pem"),):
+    if _os.path.exists(_extra): _os.remove(_extra)
+app.mostrar_pagina("config"); app._trocar_aba_config("Diagnóstico")
+_fd.CAMINHO["abrir"] = _cert_a; app.importar_certificado_rede()
+check("1 na lista" in app.toast._rotulo.cget("text"), "certificado: primeiro importado (1 na lista)")
+_fd.CAMINHO["abrir"] = _cert_b; app.importar_certificado_rede()
+check("2 na lista" in app.toast._rotulo.cget("text"), "certificado: o segundo é somado ao primeiro (2 na lista)")
+app.importar_certificado_rede()
+check("já estava" in app.toast._rotulo.cget("text"), "certificado: repetido não duplica")
+_fd.CAMINHO["abrir"] = _os.path.join(_pasta_ca, "nao-existe.pem"); app.importar_certificado_rede()
+check("Não foi possível ler" in app.toast._rotulo.cget("text"), "certificado: arquivo inexistente mostra o erro")
+_os.remove(_os.path.join(_pasta_ca, "ca-extra.pem"))
+app.mostrar_pagina("novo")
 
 # ----------------------------------------------------------------------
 # Painel de controle (usuário x administrador)

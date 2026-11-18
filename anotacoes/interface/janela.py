@@ -15,6 +15,7 @@ Cores e fonte: veja anotacoes/theme.py.
 """
 
 import logging
+import math
 import os
 import re
 import tkinter as tk
@@ -75,6 +76,7 @@ from anotacoes.nucleo.util import (
     MESES,
     cores_status,
     data_curta,
+    exibir_nome,
     formatar_data,
     formatar_lembrete,
     inicio_do_periodo,
@@ -636,6 +638,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
                 pagina.pack_forget()
         for k, item in self.nav.items():
             item.marcar(k == chave)
+        if chave == PAG_NOVO:
+            self._garantir_altura_do_formulario()
         if chave == PAG_RESUMO:
             self.atualizar_resumo()
         elif chave == PAG_HIST:
@@ -648,6 +652,20 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             self.atualizar_config()
         else:
             self.ent_contato.focus_set()
+
+    def _garantir_altura_do_formulario(self) -> None:
+        """A janela não pode ficar mais baixa do que o necessário para mostrar TODO o
+        formulário (incluindo a caixa da descrição). Mede a altura pedida pela página (qualquer fonte,
+        escala ou DPI) e sobe o tamanho mínimo da janela se preciso."""
+        try:
+            self.update_idletasks()
+            escala = float(self._get_window_scaling()) or 1.0
+            necessaria = math.ceil(self.paginas[PAG_NOVO].winfo_reqheight() / escala)
+            limite_tela = int(self.winfo_screenheight() / escala)
+            minimo = min(max(MINIMO_ALTURA, necessaria), max(MINIMO_ALTURA, limite_tela))
+            self.minsize(MINIMO_LARGURA, minimo)
+        except Exception:
+            log.debug("Não foi possível medir a altura do formulário", exc_info=True)
 
     @staticmethod
     def _card(pai) -> ctk.CTkFrame:
@@ -719,8 +737,8 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w",
         ).pack(anchor="w", pady=(2, 16))
 
-        # Contato (opcional)
-        self._rotulo(f, "Contato")
+        # Contato (obrigatório)
+        self._rotulo(f, "Contato *")
         self.ent_contato = self._entrada(f, "Ex.: (84) 99999-0000")
         self.ent_contato.pack(fill="x", pady=(6, 0))
         self.err_contato = self._rotulo_erro(f)
@@ -729,7 +747,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         # Nome (e marcação de urgência na mesma linha do rótulo)
         linha_nome = ctk.CTkFrame(f, fg_color="transparent")
         linha_nome.pack(fill="x")
-        self._rotulo(linha_nome, "Nome *", lado="left")
+        self._rotulo(linha_nome, "Nome", lado="left")
         self.chk_urgente = self._caixa_urgente(linha_nome)
         self.chk_urgente.pack(side="right")
         self.ent_nome = self._entrada(f, "Ex.: Maria da Silva")
@@ -952,7 +970,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
         descricao = self._texto(self.txt_desc)
 
         self._limpar_todos_erros()
-        erros = validar_campos(nome, contato, descricao)
+        erros = validar_campos(nome, contato, descricao, exigir_contato=True)
         lembrete = None
         try:
             lembrete = interpretar_data(self._texto(self.ent_retorno))
@@ -968,7 +986,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
                     primeiro = primeiro or campos[chave]
             primeiro.focus_set()
             self.toast.mostrar(
-                "Preencha os campos obrigatórios." if (not nome or not descricao)
+                "Preencha os campos obrigatórios." if (not contato or not descricao)
                 else "Corrija os campos destacados.",
                 "erro",
             )
@@ -1069,7 +1087,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             textos = ctk.CTkFrame(linha, fg_color="transparent")
             textos.pack(side="left", fill="x", expand=True)
             ctk.CTkLabel(
-                textos, text=resumir(nome, 30), font=fonte(14, "bold"),
+                textos, text=resumir(exibir_nome(nome), 30), font=fonte(14, "bold"),
                 text_color=T.TEXTO, anchor="w",
             ).pack(anchor="w")
             ctk.CTkLabel(
@@ -1289,7 +1307,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
 
         self.tabela.preencher([
             (str(rid), ("URG" if prio == PRIORIDADE_URGENTE else "",
-                        formatar_data(data_hora), nome, contato,
+                        formatar_data(data_hora), exibir_nome(nome), contato,
                         " ".join(descricao.split()), rotulo_retorno(lemb, st), st),
              self._tag_registro(st, lemb))
             for rid, data_hora, nome, contato, descricao, st, lemb, prio in registros
@@ -1457,7 +1475,7 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             Pilula(interno, "Urgente", T.VERMELHO_CLARO, T.VERMELHO).pack(
                 side="right", anchor="n", padx=(0, 8))
         alinhar_esquerda(ctk.CTkLabel(
-            interno, text=reg["nome"], font=fonte(22, "bold"), text_color=T.BRANCO,
+            interno, text=exibir_nome(reg["nome"]), font=fonte(22, "bold"), text_color=T.BRANCO,
             anchor="w", wraplength=440,
         )).pack(side="left", anchor="w")
         ctk.CTkFrame(janela, fg_color=T.TEAL_ACENTO, height=4, corner_radius=0).pack(fill="x")

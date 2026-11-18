@@ -22,6 +22,7 @@ from anotacoes.nucleo import seguranca
 from anotacoes.nucleo.database import DIAS_LIXEIRA, BACKUPS_MANTER, validar_campos
 from anotacoes.interface.icons import icone
 from anotacoes.nucleo.util import (
+    exibir_nome,
     formatar_data,
     formatar_lembrete,
     formatar_tamanho,
@@ -88,7 +89,7 @@ class PaginasExtrasMixin:
             font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w",
         ).pack(anchor="w", pady=(2, 14))
 
-        self._rotulo(corpo, "Contato")
+        self._rotulo(corpo, "Contato *")
         ent_contato = self._entrada(corpo, "Ex.: (84) 99999-0000")
         ent_contato.pack(fill="x", pady=(6, 0))
         ent_contato.insert(0, reg["contato"] or "")
@@ -96,7 +97,7 @@ class PaginasExtrasMixin:
 
         linha_nome = ctk.CTkFrame(corpo, fg_color="transparent")
         linha_nome.pack(fill="x")
-        self._rotulo(linha_nome, "Nome *", lado="left")
+        self._rotulo(linha_nome, "Nome", lado="left")
         chk_urgente = self._caixa_urgente(linha_nome)
         chk_urgente.pack(side="right")
         if reg["prioridade"] == "Urgente":
@@ -141,7 +142,7 @@ class PaginasExtrasMixin:
             nome = ent_nome.get().strip()
             contato = ent_contato.get().strip()
             descricao = txt_desc.get("1.0", "end").strip()
-            erros = validar_campos(nome, contato, descricao)
+            erros = validar_campos(nome, contato, descricao, exigir_contato=True)
             lembrete = None
             try:
                 # mantém a data já gravada, mesmo se ela já passou; novas datas não podem ser passadas
@@ -246,7 +247,7 @@ class PaginasExtrasMixin:
             return
         registros = self.db.listar_lixeira()
         self.tabela_lixeira.preencher([
-            (str(rid), (formatar_data(excluido), nome, contato, " ".join(desc.split()), status), "neutra")
+            (str(rid), (formatar_data(excluido), exibir_nome(nome), contato, " ".join(desc.split()), status), "neutra")
             for rid, _dh, nome, contato, desc, status, excluido in registros
         ])
         if registros:
