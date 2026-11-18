@@ -278,20 +278,30 @@ class PausasMixin:
     # Liga / desliga
     # ==================================================================
     def _montar_botao_pausas(self, pai) -> None:
-        """Botão de sino no canto do cartão do relógio (refeito junto com a barra lateral)."""
-        self._btn_pausas = ctk.CTkButton(
-            pai, text="", width=38, height=30, fg_color="transparent",
-            border_width=1, border_color=T.NAV_LINHA, hover_color=T.NAVY_ATIVO,
-            command=self.configurar_alertas_pausa)
+        """Sino no canto do cartão do relógio (refeito junto com a barra lateral).
+
+        É um quadro com um rótulo de imagem (e não um CTkButton só com imagem, que em
+        alguns Windows aparecia vazio): o desenho do sino sempre fica visível."""
+        self._btn_pausas = ctk.CTkFrame(
+            pai, width=38, height=30, corner_radius=8, fg_color="transparent",
+            border_width=1, border_color=T.NAV_LINHA)
+        self._btn_pausas.pack_propagate(False)
+        self._lbl_sino = ctk.CTkLabel(self._btn_pausas, text="",
+                                      image=icone("bell", T.NAV_TEXTO, 18))
+        self._lbl_sino.pack(expand=True)
+        for parte in (self._btn_pausas, self._lbl_sino):
+            parte.bind("<Button-1>", lambda _e: self.configurar_alertas_pausa())
+            parte.bind("<Enter>", lambda _e: self._btn_pausas.configure(fg_color=T.NAVY_ATIVO))
+            parte.bind("<Leave>", lambda _e: self._btn_pausas.configure(fg_color="transparent"))
         self._btn_pausas.place(relx=1.0, rely=0.5, anchor="e", x=-14)
         self._atualizar_botao_pausas()
 
     def _atualizar_botao_pausas(self) -> None:
-        botao = getattr(self, "_btn_pausas", None)
-        if botao is None:
+        rotulo = getattr(self, "_lbl_sino", None)
+        if rotulo is None:
             return
         ativo = self.prefs.alertas_pausa
-        botao.configure(image=icone("bell" if ativo else "bell_off", T.NAV_TEXTO, 18))
+        rotulo.configure(image=icone("bell" if ativo else "bell_off", T.NAV_TEXTO, 18))
 
     def configurar_alertas_pausa(self) -> None:
         """Abre a janela com liga/desliga e os três horários."""

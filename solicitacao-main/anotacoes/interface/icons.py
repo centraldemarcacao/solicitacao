@@ -167,6 +167,15 @@ def _sun(d, c):
                    (32 + 25 * math.cos(a), 32 + 25 * math.sin(a))], c, 4.5)
 
 
+def _recortar(d, pontos, largura):
+    """Apaga (deixa transparente) uma faixa; o ImageDraw comum não apaga com alfa 0."""
+    img = d._image
+    mascara = Image.new("L", img.size, 0)
+    ImageDraw.Draw(mascara).line([(_s(x), _s(y)) for x, y in pontos], fill=255,
+                                 width=_s(largura), joint="curve")
+    img.paste((0, 0, 0, 0), mask=mascara)
+
+
 def _bell(d, c):
     # sino: corpo (cúpula + borda), base e badalo
     d.pieslice(_caixa(14, 10, 50, 46), 180, 360, fill=c)
@@ -179,7 +188,7 @@ def _bell(d, c):
 def _bell_off(d, c):
     # sino com traço diagonal (alertas desligados)
     _bell(d, c)
-    _linha(d, [(10, 54), (54, 8)], (0, 0, 0, 0), 13)   # recorte ao redor do traço
+    _recortar(d, [(10, 54), (54, 8)], 13)               # recorte ao redor do traço
     _linha(d, [(10, 54), (54, 8)], c, 5)
 
 

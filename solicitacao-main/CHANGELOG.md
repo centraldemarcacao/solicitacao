@@ -4,6 +4,8 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Sino dos alertas de pausa**: o ícone não aparecia (quadrado vazio) em alguns computadores; agora é desenhado
+  num rótulo de imagem, sempre visível, e o sino "desligado" ganhou o recorte ao redor do traço.
 * **Vários monitores**: o menu do botão direito e as janelas centralizadas agora abrem no monitor onde está o
   mouse/janela (antes iam para o monitor principal). A posição salva da janela também vale no segundo monitor.
 * **Modelos de descrição mais discretos**: os balões ficaram menores (altura 26, largura conforme o texto), todos do

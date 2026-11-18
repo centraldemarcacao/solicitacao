@@ -1114,6 +1114,11 @@ class _Relogio:
 pausas_gui.datetime = _Relogio
 pausas_gui._tocar_sinal = lambda j: j.bell()
 check(app._btn_pausas.mapped and app.prefs.alertas_pausa, "botão de sino na barra lateral (alertas ligados por padrão)")
+check(app._lbl_sino.cget("image") is not None and app._lbl_sino.mapped, "sino: ícone visível no cartão do relógio")
+_ant = app.prefs.alertas_pausa
+app.prefs.alertas_pausa = False; app._atualizar_botao_pausas()
+check(app._lbl_sino.cget("image") is not None, "sino: ícone também com alertas desligados")
+app.prefs.alertas_pausa = _ant; app._atualizar_botao_pausas()
 check(("Ctrl + L") in [a for a, _ in __import__("anotacoes.interface.mixins.atalhos", fromlist=["x"]).ATALHOS] and "<Control-l>" in app.binds, "Ctrl+L registrado e listado em F1")
 app._ciclo_pausas(); check(app._dialogo_pausa is None, "10:00: nenhum alerta")
 _Relogio.agora = _dt(2026, 11, 11, 14, 40, 0); bips0 = getattr(app, "bips", 0)
@@ -1139,7 +1144,7 @@ _Relogio.agora = _dt(2026, 11, 12, 14, 40, 0)
 app._ciclo_pausas(); check(app._dialogo_pausa is None and "NR 17" in app.toast._rotulo.cget("text"), "se a janela falhar, o aviso sai como notificação")
 
 # --- horários editáveis ---
-app._btn_pausas._cfg["command"]()
+app.configurar_alertas_pausa()
 dlg = app._dialogo_horarios
 check(dlg is not None and sorted(dlg.entradas) == ["lanche", "nr17_1", "nr17_2"], "sino abre a janela de horários com 3 campos")
 check([dlg.entradas[k].get() for k in ("nr17_1", "lanche", "nr17_2")] == ["14:40", "17:00", "18:10"] and dlg.chk_ativo.get() == 1, "janela mostra horários atuais e alertas ligados")
