@@ -63,7 +63,7 @@ SQL_PAINEL = """\
 --
 -- Como funciona
 --   * Papel "admin": guardado em auth.users.raw_app_meta_data ->> 'role'. Só quem tem a chave
---     secreta (script scripts/usuarios_nuvem.py) ou o painel do Supabase consegue alterar isso;
+--     secreta (python -m anotacoes.nuvem.admin) ou o painel do Supabase consegue alterar isso;
 --     o usuário comum NÃO consegue se promover.
 --   * O programa nunca recebe a chave secreta: o painel conversa só com as funções abaixo, que
 --     conferem o papel NO BANCO a cada chamada (desativar um administrador vale na hora).
@@ -308,7 +308,7 @@ notify pgrst, 'reload schema';
 
 -- ----------------------------------------------------------------------
 -- Primeiro administrador (execute UMA vez, trocando o e-mail), ou use:
---   python scripts/usuarios_nuvem.py papel seu@email.com admin
+--   python -m anotacoes.nuvem.admin papel seu@email.com admin
 --
 --   update auth.users
 --      set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'

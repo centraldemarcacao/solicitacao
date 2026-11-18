@@ -1,13 +1,4 @@
-"""
-Testes da sincronização com a nuvem (nuvem/cliente.py, nuvem/sincronizacao.py e as colunas /
-gatilhos de nucleo/database.py).
-
-Não usam internet: um "Supabase de mentira" (FakeSupabase) responde no lugar da
-rede, imitando login, renovação de sessão e a API REST (filtros, ordenação,
-limite e gravação em lote com 'merge-duplicates').
-
-Execute (na raiz do repositório):  python -m unittest tests.nuvem.test_nuvem -v
-"""
+"""Nuvem (Supabase): cliente, sincronização e projeto fixo (nuvem/projeto.py)."""
 
 import os
 import re
@@ -17,15 +8,18 @@ import unittest
 import urllib.parse
 from datetime import datetime
 from unittest import mock
-
 from anotacoes.nuvem import cliente as nuvem
 from anotacoes.nuvem import sincronizacao
 from anotacoes.nucleo.database import Database, agora_utc
 from anotacoes.nuvem.cliente import ClienteSupabase, NuvemErro
 from anotacoes.nuvem.sql import SQL_CONFIGURACAO, TABELA
 from anotacoes.nuvem.sincronizacao import da_nuvem, para_nuvem, sincronizar
+from anotacoes.nuvem import projeto
+
 
 CHAVE = "sb_publishable_" + "x" * 30
+
+
 URL = "https://abcdefgh.supabase.co"
 
 
@@ -567,6 +561,26 @@ class TestSincronizacao(BaseNuvem):
         r = sincronizar(db, self.cliente())
         self.assertEqual(r.enviados, 1)
         self.assertEqual(len(self.server.linhas), 1)
+
+
+CHAVE_FIXA = "sb_publishable_" + "A" * 24
+
+
+class TestProjetoFixo(unittest.TestCase):
+    def test_sem_chave_nao_fixa(self):
+        self.assertIsNone(projeto.projeto_fixo("https://abc.supabase.co", ""))
+        self.assertIsNone(projeto.projeto_fixo("", CHAVE_FIXA))
+
+    def test_completo_normaliza(self):
+        self.assertEqual(projeto.projeto_fixo("abc.supabase.co", CHAVE_FIXA),
+                         ("https://abc.supabase.co", CHAVE_FIXA))
+
+    def test_recusa_chave_secreta(self):
+        self.assertIsNone(projeto.projeto_fixo("https://abc.supabase.co", "sb_secret_" + "x" * 30))
+
+    def test_padrao_do_repositorio_e_valido_ou_vazio(self):
+        r = projeto.projeto_fixo()
+        self.assertTrue(r is None or r[1].startswith(("sb_publishable_", "eyJ")))
 
 
 if __name__ == "__main__":

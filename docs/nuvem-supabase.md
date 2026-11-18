@@ -76,12 +76,12 @@ O menu **Painel** tem duas abas:
 **Ativar (uma vez):**
 1. No Supabase, SQL Editor, execute `supabase/setup.sql` e depois `supabase/painel.sql` (no programa:
    Painel > Administração > *Copiar SQL do painel*; antes do primeiro administrador, copie o arquivo do repositório).
-2. Defina o primeiro administrador: `python scripts/usuarios_nuvem.py papel seu@email.com admin`
+2. Defina o primeiro administrador: `python -m anotacoes.nuvem.admin papel seu@email.com admin`
    (ou o `update` comentado no fim do `painel.sql`). Entre de novo no programa para valer.
    **Sem terminal (pelo GitHub):** em Settings > Secrets and variables > Actions, crie o segredo
    `SUPABASE_SERVICE_KEY` com a chave secreta; depois, em Actions > *Definir papel na nuvem* > Run workflow,
    informe o e-mail e o papel. **Sem GitHub:** no SQL Editor, rode o `update` comentado no fim do `painel.sql`.
-3. Novos usuários (sem terminal): no programa, **Painel > Administração > Novo usuário** (e-mail, senha ou *Gerar senha forte*, e a opção Administrador). A conta nasce confirmada e pode entrar na hora. Se preferir, Supabase > Authentication > Users > Add user (marque *Auto Confirm User*). Pelo terminal: `python scripts/usuarios_nuvem.py criar EMAIL --gerar-senha [--admin]`.
+3. Novos usuários (sem terminal): no programa, **Painel > Administração > Novo usuário** (e-mail, senha ou *Gerar senha forte*, e a opção Administrador). A conta nasce confirmada e pode entrar na hora. Se preferir, Supabase > Authentication > Users > Add user (marque *Auto Confirm User*). Pelo terminal: `python -m anotacoes.nuvem.admin criar EMAIL --gerar-senha [--admin]`.
 
 **Como é protegido:** o papel fica em `app_metadata` (o usuário não consegue alterar); cada função do painel
 confere o papel no banco a cada chamada; visitantes (`anon`) não executam nada; o programa nunca recebe a chave
@@ -97,9 +97,9 @@ Para o **administrador** criar, listar ou trocar a senha de usuários direto do 
 no Supabase:
 
 ```
-python scripts/usuarios_nuvem.py listar
-python scripts/usuarios_nuvem.py criar medico@hospital.org --gerar-senha
-python scripts/usuarios_nuvem.py senha medico@hospital.org
+python -m anotacoes.nuvem.admin listar
+python -m anotacoes.nuvem.admin criar medico@hospital.org --gerar-senha
+python -m anotacoes.nuvem.admin senha medico@hospital.org
 ```
 
 * O script usa a chave **secreta** do projeto (*Project Settings > API Keys > Secret key*, ou a

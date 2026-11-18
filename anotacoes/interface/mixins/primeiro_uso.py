@@ -2,7 +2,7 @@
 primeiro_uso.py
 ---------------
 Assistente de boas-vindas, mostrado uma vez em instalação nova: começar do zero, entrar pela
-nuvem (já uso em outro computador) ou restaurar um backup. Regras em nucleo/primeiro_uso.py.
+nuvem (já uso em outro computador) ou restaurar um backup. Regras em nucleo/preferencias.py.
 """
 
 import logging
@@ -12,7 +12,7 @@ import customtkinter as ctk
 
 from anotacoes import theme as T
 from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
-from anotacoes.nucleo import primeiro_uso as regras
+from anotacoes.nucleo import preferencias as regras
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class PrimeiroUsoMixin:
         except Exception:
             log.warning("Falha ao contar registros no primeiro uso", exc_info=True)
             return
-        if not regras.deve_mostrar(False, total, self.nuvem_conectada(), self.seguranca.ativa):
+        if not regras.deve_mostrar_primeiro_uso(False, total, self.nuvem_conectada(), self.seguranca.ativa):
             self._concluir_primeiro_uso()          # instalação já em uso: nunca mostrar
             return
         if minimizado:

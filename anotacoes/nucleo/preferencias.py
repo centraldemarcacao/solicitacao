@@ -21,6 +21,13 @@ CHAVE_MODELOS = "modelos_descricao"
 CHAVE_PRIMEIRO_USO = "primeiro_uso_concluido"
 
 
+def deve_mostrar_primeiro_uso(concluido: bool, total_registros: int, nuvem_conectada: bool,
+                              tem_pin: bool) -> bool:
+    """Assistente de boas-vindas: só em instalação realmente nova (sem registros, sem nuvem
+    conectada, sem PIN e sem ter sido concluído antes)."""
+    return not (concluido or total_registros > 0 or nuvem_conectada or tem_pin)
+
+
 class Preferencias:
     def __init__(self, caminho: str) -> None:
         self.caminho = caminho

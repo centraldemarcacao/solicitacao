@@ -141,7 +141,7 @@ class NuvemMixin:
             text_color=T.SOBRE_COR, command=self.conectar_nuvem)
         self.btn_nuvem_conectar.pack(side="left")
         # "Criar conta": desligado por padrão (projeto.PERMITIR_CADASTRO). O cadastro de terceiros
-        # é barrado pelo Supabase; o administrador cria usuários com scripts/usuarios_nuvem.py.
+        # é barrado pelo Supabase; o administrador cria usuários com anotacoes/nuvem/admin.py.
         self.btn_nuvem_criar = None
         if projeto.PERMITIR_CADASTRO:
             self.btn_nuvem_criar = ctk.CTkButton(

@@ -16,7 +16,7 @@ Deixe vazio para voltar a pedir endereço e chave na tela.
                        este arquivo é público, então a chave NÃO protege nada, e o que
                        impede cadastros de terceiros é o Supabase com "Allow new users to
                        sign up" DESLIGADO. Para criar usuários use o administrador:
-                       scripts/usuarios_nuvem.py (veja docs/nuvem-supabase.md).
+                       anotacoes/nuvem/admin.py (veja docs/nuvem-supabase.md).
                        Só ligue se o cadastro estiver liberado no Supabase de propósito.
 """
 

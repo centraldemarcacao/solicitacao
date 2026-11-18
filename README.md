@@ -16,9 +16,9 @@ entregue como um único `.exe` que se atualiza sozinho.
 * **Desfazer** (Ctrl+Z), atalhos de teclado (F1 mostra todos) e tema claro/escuro.
 * **Painel de controle**: números pessoais para todos e gestão de contas (ativar/desativar, papéis) para administradores, sem expor dados de pacientes.
 * **Nuvem (opcional)**: sincronização com Supabase gratuito, com uso offline. O administrador cria e troca senhas
-  de usuários sem abrir o painel (`scripts/usuarios_nuvem.py`; veja `docs/nuvem-supabase.md`).
+  de usuários sem abrir o painel (`anotacoes/nuvem/admin.py`; veja `docs/nuvem-supabase.md`).
 * **Alertas de pausa**: avisos às 14:40 (NR 17), 17:00 (lanche) e 18:10 (NR 17); horários editáveis e liga/desliga no sino do menu (Ctrl + L).
-* **Segurança (opcional)**: PIN/senha, bloqueio por inatividade (Ctrl + B bloqueia na hora) e backups criptografados (AES-256). Veja `docs/seguranca.md`.
+* **Segurança (opcional)**: PIN/senha, bloqueio por inatividade (Ctrl + B bloqueia na hora) e backups criptografados (AES-256). Veja `docs/personalizar-e-seguranca.md`.
 * **Iniciar com o Windows**, minimizado, para os alertas de pausa não dependerem de abrir o programa.
 * **Configurações** (engrenagem do menu, Ctrl + ,): segurança e **diagnóstico** (versão, pastas e teste de conexão com GitHub e Supabase).
 * **Modelos de descrição**: frases prontas para pedidos frequentes, com um clique.
@@ -38,10 +38,9 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   ├── nucleo/                #   regras e dados (sem interface)
 │   │   ├── database.py        #     SQLite, lixeira, backups, gatilhos de sincronização
 │   │   ├── util.py            #     validações e formatação
-│   │   ├── preferencias.py    #     preferências do usuário
+│   │   ├── preferencias.py    #     preferências do usuário e regra do assistente de primeiro uso
 │   │   ├── pausas.py          #     horários dos alertas de pausa
 │   │   ├── modelos.py         #     modelos de descrição
-│   │   ├── primeiro_uso.py    #     quando mostrar o assistente de boas-vindas
 │   │   ├── seguranca.py       #     PIN, bloqueio e criptografia dos backups
 │   │   ├── inicializacao.py   #     iniciar com o Windows
 │   │   ├── instancia.py       #     uma janela só (mutex)
@@ -52,7 +51,8 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   └── identidade.py      #     nome, subtítulo, logo e ícone
 │   ├── nuvem/                 #   Supabase (sem interface)
 │   │   ├── cliente.py         #     login, cadastro e API REST
-│   │   ├── admin.py           #     administração de usuários (chave secreta; só em linha de comando)
+│   │   ├── admin.py           #     administração de usuários (chave secreta; só em linha de comando: python -m anotacoes.nuvem.admin)
+│   │   ├── painel.py          #     painel de controle (funções painel_* do Supabase)
 │   │   ├── sincronizacao.py   #     motor de sincronização
 │   │   └── sql.py             #     SQL de configuração
 │   ├── atualizacao/
@@ -63,12 +63,11 @@ entregue como um único `.exe` que se atualiza sozinho.
 │       └── mixins/            #     uma área por arquivo (resumo, páginas, nuvem…)
 ├── tests/                     # testes (espelha o pacote)
 ├── assets/                    # ícone e logo
-├── supabase/setup.sql         # tabela e regras de segurança da nuvem
+├── supabase/                  # setup.sql (tabela e segurança da nuvem) e painel.sql (painel de controle)
 ├── installer/anotacoes.iss    # script do instalador (Inno Setup, usado pelo Actions)
 ├── scripts/build.bat          # gera o .exe no seu computador
-├── scripts/usuarios_nuvem.py  # administrador: criar/listar/trocar senha de usuários da nuvem
-├── docs/                      # guias (segurança, arquitetura, publicar versão, nuvem, personalizar)
-├── .github/workflows/         # ci.yml (testes) e release.yml (testa, gera o .exe e publica a Release a cada push em main)
+├── docs/                      # guias (nuvem, arquitetura, publicar versão, personalizar e segurança)
+├── .github/workflows/         # ci.yml (testes), release.yml (testa, gera o .exe e publica a Release a cada push em main) e papel-nuvem.yml (define administrador sem terminal)
 ├── .github/dependabot.yml     # atualizações das dependências fixadas
 ├── CHANGELOG.md               # histórico de versões
 ├── requirements.txt           # dependências de execução
@@ -116,7 +115,7 @@ Atalhos principais: `Ctrl+N` novo · `Ctrl+S` salvar · `Ctrl+F` buscar · `F2` 
 * [Arquitetura](docs/arquitetura.md): camadas, dados, sincronização, convenções.
 * [Publicar uma versão](docs/publicar-versao.md): tag, Release e atualização automática.
 * [Nuvem (Supabase)](docs/nuvem-supabase.md): configuração e cuidados.
-* [Personalizar nome, logo e ícone](docs/personalizar.md).
+* [Personalizar nome, logo e ícone](docs/personalizar-e-seguranca.md).
 * [Histórico de versões](CHANGELOG.md).
 
 ## Segurança e privacidade (LGPD)

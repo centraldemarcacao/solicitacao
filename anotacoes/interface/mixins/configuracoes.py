@@ -148,7 +148,7 @@ class ConfiguracoesMixin:
                                             text_color=T.TEXTO_SUAVE, anchor="w", wraplength=780)
         self.lbl_cripto_info.pack(anchor="w", pady=(4, 0))
         ctk.CTkLabel(
-            aba, text="Esqueceu o PIN? Veja docs/seguranca.md. Sem a senha, backups criptografados "
+            aba, text="Esqueceu o PIN? Veja docs/personalizar-e-seguranca.md. Sem a senha, backups criptografados "
                       "não podem ser abertos.", font=fonte(12), text_color=T.TEXTO_SUAVE,
             anchor="w").pack(side="bottom", anchor="w")
 

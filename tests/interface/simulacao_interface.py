@@ -1436,10 +1436,10 @@ RESP["v"] = True
 _projeto_mod.PERMITIR_CADASTRO = False
 
 # --- Importar certificado da rede: acumula (GitHub + Supabase) ----------------------------
-import ssl as _ssl, tempfile as _tf, os as _os
+import tempfile as _tf, os as _os
 _cert_a = _os.path.join(_tf.mkdtemp(), "a.pem")
 _cert_b = _os.path.join(_tf.mkdtemp(), "b.cer")
-from tests.nucleo.test_certificados_acumular import SECTIGO_E46, _raiz_de_teste
+from tests.nucleo.test_certificados import SECTIGO_E46, _raiz_de_teste
 open(_cert_a, "w", newline="").write(SECTIGO_E46)
 open(_cert_b, "wb").write(_raiz_de_teste("Raiz do Supabase"))
 _fd = sys.modules["tkinter.filedialog"]
@@ -1462,7 +1462,6 @@ app.mostrar_pagina("novo")
 # Painel de controle (usuário x administrador)
 # ----------------------------------------------------------------------
 from anotacoes.interface.mixins import painel as painel_gui
-from anotacoes.nuvem import painel as painel_core
 from anotacoes.nuvem.cliente import NuvemErro as _NuvemErro
 
 app._nuvem_cfg.definir(url="https://abc.supabase.co", chave="sb_publishable_" + "p" * 30,

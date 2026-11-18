@@ -3,11 +3,11 @@ admin.py
 --------
 Administração de usuários da nuvem (Supabase), SEM abrir o painel do Supabase.
 
-Pensado para o ADMINISTRADOR, em linha de comando (veja scripts/usuarios_nuvem.py):
+Pensado para o ADMINISTRADOR, em linha de comando (veja anotacoes/nuvem/admin.py):
 
-    python scripts/usuarios_nuvem.py listar
-    python scripts/usuarios_nuvem.py criar medico@hospital.org --gerar-senha
-    python scripts/usuarios_nuvem.py senha medico@hospital.org
+    python -m anotacoes.nuvem.admin listar
+    python -m anotacoes.nuvem.admin criar medico@hospital.org --gerar-senha
+    python -m anotacoes.nuvem.admin senha medico@hospital.org
 
 Usa a chave SECRETA do projeto (Secret key / service_role). Ela pode tudo, por isso:
   * NUNCA vai para o programa, o repositório ou o GitHub: é lida da variável de ambiente
@@ -22,6 +22,7 @@ import base64
 import getpass
 import json
 import os
+import sys
 from typing import Callable, List, Optional
 
 from anotacoes.nuvem import projeto
@@ -207,3 +208,7 @@ def executar_cli(argv: List[str], ambiente: Optional[dict] = None,
     except (ValueError, NuvemErro) as exc:
         saida(f"Erro: {exc}")
         return 1
+
+
+if __name__ == "__main__":
+    sys.exit(executar_cli(sys.argv[1:]))

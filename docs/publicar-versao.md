@@ -48,3 +48,24 @@ possa gravar (Documentos, Área de Trabalho). Os dados ficam em `%LOCALAPPDATA%\
 
 ## Gerar o `.exe` no seu computador (sem GitHub)
 Dê duplo clique em `scripts/build.bat` (requer Python 3.10+). O resultado fica em `dist/`.
+
+## Atualizar uma instalação existente (esta versão)
+**1) GitHub (pelo navegador)**
+1. Extraia o zip. No repositório: **Add file > Upload files**, arraste TODO o conteúdo extraído (inclusive `.github`, `anotacoes`, `docs`, `supabase`, `tests`) e faça o commit na `main`.
+2. O envio **não apaga** arquivos antigos. Apague estes, um a um (abra o arquivo > menu **...** > **Delete file** > Commit), para o CI não achar testes ou guias velhos:
+   * `anotacoes/nucleo/primeiro_uso.py`
+   * `scripts/usuarios_nuvem.py` (e a pasta `scripts` fica só com `build.bat`)
+   * `assets/README.md`
+   * `docs/personalizar.md` e `docs/seguranca.md`
+   * `tests/nucleo/test_modelos.py`, `tests/nucleo/test_pausas.py`
+   * `tests/nucleo/test_certificados_importar.py`, `tests/nucleo/test_certificados_acumular.py`
+   * `tests/nuvem/test_projeto.py`
+3. Em **Actions**, espere **Testes (CI)** e **Publicar versão** ficarem verdes (a Release nova aparece em **Releases**).
+4. Se for usar o botão "Definir papel na nuvem": Settings > Secrets and variables > Actions > segredo `SUPABASE_SERVICE_KEY`.
+
+**2) Banco de dados (Supabase > SQL Editor)**
+1. Abra uma consulta nova (**+**), cole o conteúdo de `supabase/painel.sql` e clique em **Run** (esperado: *Success*). Ele pode ser executado de novo sem problema e traz a função nova de criar usuário. Se nunca rodou o `setup.sql`, rode-o antes da mesma forma.
+2. Defina o administrador: Actions > **Definir papel na nuvem** > Run workflow (e-mail + `admin`), ou rode no SQL Editor o `update` comentado no fim do `painel.sql`.
+
+**3) Nos computadores:** o programa se atualiza sozinho (ou instale o `.exe` da Release por cima: dados e backups são preservados). Se a atualização acusar erro de certificado, veja a tabela de erros acima.
+

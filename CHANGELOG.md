@@ -4,6 +4,11 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Projeto mais enxuto** (sem mudar o comportamento): menos arquivos. A regra do assistente de primeiro uso foi
+  para `nucleo/preferencias.py`; o administrador de usuários roda com `python -m anotacoes.nuvem.admin` (o
+  `scripts/usuarios_nuvem.py` deixou de existir); os guias de personalização, segurança e `assets/README.md` viraram
+  `docs/personalizar-e-seguranca.md`; os testes de certificados, preferências/modelos/pausas e projeto fixo foram
+  agrupados por assunto (os mesmos testes, em menos arquivos).
 * **Novo registro**: **Contato** passa a ser obrigatório (no cadastro e na edição) e **Nome** passa a ser opcional;
   registros sem nome aparecem como "Sem nome" (histórico, lixeira, resumo, detalhes e exportações). A caixa
   **Descrição da solicitação** nunca mais some ao diminuir a janela: o programa mede a altura que o formulário
@@ -21,7 +26,7 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
   administradores: contas da nuvem, ativar/desativar acesso, promover/rebaixar papel, totais por usuário e
   registro das últimas ações). O administrador vê **apenas contagens, nunca nome, contato ou descrição de
   paciente**. O papel é decidido pelo servidor (`supabase/painel.sql`); sem internet ou em caso de erro, a
-  administração fica oculta. Primeiro administrador: `python scripts/usuarios_nuvem.py papel EMAIL admin`.
+  administração fica oculta. Primeiro administrador: `python -m anotacoes.nuvem.admin papel EMAIL admin`.
 * **Banco em modo WAL** (`journal_mode=WAL`, `synchronous=NORMAL`): mais resistente a queda de energia e
   a travamentos. Os backups continuam sendo um arquivo único. Se a pasta não aceitar WAL, o programa segue
   no modo antigo e registra o aviso.
@@ -34,7 +39,7 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
   dica do atalho de teclado à direita (Enter, F2, Del, Ctrl+E, Ctrl+P), cabeçalho com a quantidade de registros
   selecionados, destaque suave ao passar o mouse e **Excluir em vermelho**. Acompanham o tema claro/escuro e
   funcionam pelo teclado (setas, Enter e Esc). Antes era o menu cinza nativo do Windows.
-* **Usuários da nuvem sem abrir o painel**: `scripts/usuarios_nuvem.py` cria usuários (já confirmados), lista e
+* **Usuários da nuvem sem abrir o painel**: `anotacoes/nuvem/admin.py` cria usuários (já confirmados), lista e
   troca senhas usando a chave **secreta** (variável `SUPABASE_SERVICE_KEY`, nunca no repositório), inclusive com o
   cadastro aberto desligado no Supabase. Senha forte gerada com `--gerar-senha`.
 * **Botão "Criar conta" (desligado por padrão)** na página Nuvem (`PERMITIR_CADASTRO` em `projeto.py`), com senha
@@ -71,7 +76,7 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 * **Backups criptografados** (AES-256-GCM, arquivos `.dbx`) com a mesma senha; a restauração pede a senha.
   Os backups antigos podem ser convertidos com um clique. **Guarde a senha**: sem ela o backup não abre.
   O PIN protege o uso do programa; o banco em uso continua legível por quem acessa a pasta (veja
-  `docs/seguranca.md`).
+  `docs/personalizar-e-seguranca.md`).
 * **Iniciar com o Windows, minimizado**: opção na janela Alertas de pausa; os avisos de pausa funcionam
   sem abrir o programa à mão. Só uma janela do programa abre por vez.
 * **Diagnóstico** (Configurações): versão, pastas, estado da proteção e **teste de conexão** com GitHub e
