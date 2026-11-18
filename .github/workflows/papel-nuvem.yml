@@ -38,4 +38,4 @@ jobs:
             echo "Falta o segredo SUPABASE_SERVICE_KEY (Settings > Secrets and variables > Actions)."; exit 1
           fi
           echo "::add-mask::$EMAIL"
-          python scripts/usuarios_nuvem.py papel "$EMAIL" "$PAPEL"
+          python -m anotacoes.nuvem.admin papel "$EMAIL" "$PAPEL"
