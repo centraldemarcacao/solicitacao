@@ -82,9 +82,12 @@ def limites_da_tela(janela, x: int, y: int) -> tuple:
 
 
 def ajustar_ao_monitor(janela, x: int, y: int, w: int, h: int, margem: int = 8,
-                       abrir_para_cima: bool = False) -> tuple:
-    """Devolve (x, y) mantendo a janela w×h dentro do monitor do ponto (x, y)."""
+                       abrir_para_cima: bool = False, x0=None, y0=None) -> tuple:
+    """Devolve (x, y) mantendo a janela w×h dentro do monitor do ponto (x, y).
+    `x0`/`y0`: canto desejado da janela (padrão: o próprio ponto)."""
     esq, topo, dir_, base = limites_da_tela(janela, x, y)
+    x = x if x0 is None else x0
+    y = y if y0 is None else y0
     if x + w > dir_ - margem:
         x = dir_ - w - margem
     if x < esq + margem:
@@ -96,18 +99,44 @@ def ajustar_ao_monitor(janela, x: int, y: int, w: int, h: int, margem: int = 8,
     return int(x), int(y)
 
 
+def _pai_visivel(pai) -> bool:
+    """A janela principal está na tela (não minimizada, oculta nem fora da área visível)?"""
+    try:
+        if str(pai.state()) in ("iconic", "withdrawn"):
+            return False
+    except Exception:
+        log.debug("Estado da janela principal indisponível", exc_info=True)
+    try:
+        return pai.winfo_width() > 50 and pai.winfo_rootx() > -10000
+    except Exception:
+        return False
+
+
 def centralizar(janela, pai, largura: int, altura: int) -> None:
-    """Posiciona `janela` no centro de `pai` (considera a escala do Windows)."""
+    """Abre `janela` no centro da janela principal (considera a escala do Windows).
+
+    Se a principal estiver minimizada/oculta (ex.: alerta de pausa), centraliza no
+    monitor onde está o mouse. Só define a posição inicial: a janela continua livre
+    para ser arrastada para onde a pessoa quiser."""
     try:
         pai.update_idletasks()
         try:
             fator = janela._get_window_scaling()
         except Exception:
             fator = 1.0
-        x = pai.winfo_rootx() + (pai.winfo_width() - int(largura * fator)) // 2
-        y = pai.winfo_rooty() + (pai.winfo_height() - int(altura * fator)) // 2
         w, h = int(largura * fator), int(altura * fator)
-        x, y = ajustar_ao_monitor(janela, x + w // 2, y + h // 2, w, h, margem=0)
+        if _pai_visivel(pai):
+            cx = pai.winfo_rootx() + pai.winfo_width() // 2
+            cy = pai.winfo_rooty() + pai.winfo_height() // 2
+        else:
+            try:
+                cx, cy = pai.winfo_pointerx(), pai.winfo_pointery()
+            except Exception:
+                cx, cy = pai.winfo_screenwidth() // 2, pai.winfo_screenheight() // 2
+            esq, topo, dir_, base = limites_da_tela(pai, cx, cy)
+            cx, cy = (esq + dir_) // 2, (topo + base) // 2
+        x, y = ajustar_ao_monitor(janela, cx, cy, w, h, margem=0,
+                                  x0=cx - w // 2, y0=cy - h // 2)
         janela.geometry(f"{largura}x{altura}+{x}+{y}")
     except Exception:
         janela.geometry(f"{largura}x{altura}")
@@ -225,23 +254,105 @@ class CaixaBusca(ctk.CTkFrame):
 
 
 class FluxoBotoes(ctk.CTkFrame):
-    """Botões lado a lado que quebram de linha sozinhos conforme a largura disponível
+    """Itens lado a lado que quebram de linha sozinhos conforme a largura disponível
     (ao ampliar ou encolher a janela, eles se reorganizam). `ao_mudar_linhas()` é chamado
-    quando a quantidade de linhas muda."""
+    quando a quantidade de linhas muda.
 
-    def __init__(self, pai, espaco: int = 6, ao_mudar_linhas=None) -> None:
+    Itens "móveis" (`adicionar(item, movel=True, ao_clicar=...)`) podem ser arrastados com o
+    mouse para outra posição; ao soltar, `ao_reordenar(ordem)` recebe a nova ordem (lista dos
+    `chave` dos itens móveis). Um clique sem arrastar chama `ao_clicar`."""
+
+    LIMIAR_ARRASTO = 6      # pixels de movimento para contar como arrasto (e não clique)
+
+    def __init__(self, pai, espaco: int = 6, ao_mudar_linhas=None, ao_reordenar=None) -> None:
         super().__init__(pai, fg_color="transparent")
         self._itens = []
+        self._moveis = {}            # item -> (chave, ao_clicar)
         self._espaco = espaco
         self._largura = 0
         self._linhas = 0
         self._ao_mudar = ao_mudar_linhas
+        self._ao_reordenar = ao_reordenar
+        self._pressionado = None     # (item, x_inicial, y_inicial)
+        self._arrastando = None
         self.bind("<Configure>", self._configurou)
 
-    def adicionar(self, botao) -> None:
+    def adicionar(self, botao, movel: bool = False, chave=None, ao_clicar=None, partes=()) -> None:
         self._itens.append(botao)
+        if movel:
+            self._moveis[botao] = (chave, ao_clicar)
+            for parte in (botao, *partes):
+                parte.bind("<ButtonPress-1>", lambda e, b=botao: self._pressionou(b, e), add="+")
+                parte.bind("<B1-Motion>", self._moveu, add="+")
+                parte.bind("<ButtonRelease-1>", self._soltou, add="+")
         self._reordenar(self._largura)
 
+    # --- arrastar ------------------------------------------------------
+    def _pressionou(self, item, evento) -> None:
+        self._pressionado = (item, evento.x_root, evento.y_root)
+        self._arrastando = None
+
+    def _item_em(self, x: int, y: int):
+        """Item móvel sob o ponto (coordenadas da tela), ou o mais próximo na mesma linha."""
+        melhor, dist = None, None
+        for item in self._moveis:
+            try:
+                esq, topo = item.winfo_rootx(), item.winfo_rooty()
+                dir_, base = esq + item.winfo_width(), topo + item.winfo_height()
+            except Exception:
+                continue
+            if esq <= x <= dir_ and topo <= y <= base:
+                return item
+            if topo - 4 <= y <= base + 4:
+                d = min(abs(x - esq), abs(x - dir_))
+                if dist is None or d < dist:
+                    melhor, dist = item, d
+        return melhor
+
+    def _moveu(self, evento) -> None:
+        if self._pressionado is None:
+            return
+        item, x0, y0 = self._pressionado
+        if self._arrastando is None:
+            if abs(evento.x_root - x0) + abs(evento.y_root - y0) < self.LIMIAR_ARRASTO:
+                return
+            self._arrastando = item
+            try:
+                self.configure(cursor="fleur")
+            except Exception:
+                log.debug("Cursor de arrasto indisponível", exc_info=True)
+        alvo = self._item_em(evento.x_root, evento.y_root)
+        if alvo is not None and alvo is not item and alvo in self._moveis:
+            self.mover(item, self._itens.index(alvo))
+
+    def mover(self, item, indice: int) -> None:
+        """Coloca `item` na posição `indice` da lista e refaz as linhas."""
+        self._itens.remove(item)
+        self._itens.insert(indice, item)
+        self._reordenar(self._largura)
+
+    def _soltou(self, _evento) -> None:
+        pressionado, arrastou = self._pressionado, self._arrastando
+        self._pressionado = self._arrastando = None
+        try:
+            self.configure(cursor="")
+        except Exception:
+            log.debug("Cursor de arrasto indisponível", exc_info=True)
+        if pressionado is None:
+            return
+        item = pressionado[0]
+        chave, ao_clicar = self._moveis.get(item, (None, None))
+        if arrastou is not None:
+            if self._ao_reordenar:
+                self._ao_reordenar(self.ordem())
+        elif ao_clicar:
+            ao_clicar()
+
+    def ordem(self) -> list:
+        """Chaves dos itens móveis, na ordem atual."""
+        return [self._moveis[i][0] for i in self._itens if i in self._moveis]
+
+    # --- layout --------------------------------------------------------
     def _configurou(self, evento) -> None:
         if evento.width != self._largura:
             self._largura = evento.width
@@ -256,12 +367,13 @@ class FluxoBotoes(ctk.CTkFrame):
         except Exception:
             log.debug("Escala do widget indisponível", exc_info=True)
         folga = round(self._espaco * escala)
+        util = largura - 2 * folga          # sobra de segurança: nada encosta na borda
         for botao in self._itens:
             try:
                 tamanho = int(botao.winfo_reqwidth())
             except Exception:
                 tamanho = round(int(botao.cget("width") or 100) * escala)
-            if largura > 1 and coluna and usado + tamanho > largura:
+            if largura > 1 and coluna and usado + tamanho > util:
                 linha, coluna, usado = linha + 1, 0, 0
             botao.grid(row=linha, column=coluna, padx=(0, self._espaco),
                        pady=(0, self._espaco), sticky="w")

@@ -4,6 +4,12 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Janelas sempre centralizadas e livres**: Detalhes, Alertas de pausa, Personalizar e o aviso de pausa abrem no
+  centro da janela principal (ou, com ela minimizada, no centro do monitor do mouse) e podem ser arrastados.
+* **Modelos de descrição móveis**: arraste um balão para outra posição e a ordem fica salva. Clicar continua
+  inserindo o texto. A fileira também deixou uma folga na borda (o último balão aparecia cortado).
+* **Alertas de pausa com nome editável**: cada pausa tem nome e horário na janela; o nome vira o título do aviso e a
+  mensagem acompanha o nome (sem falar em "NR 17" numa pausa que você renomeou). Textos da janela revisados.
 * **Sino dos alertas de pausa**: o ícone não aparecia (quadrado vazio). O botão era criado sem imagem e recebia o
   desenho depois; agora a imagem vai na criação, como nos outros botões de ícone. O sino "desligado" ganhou o
   recorte ao redor do traço.

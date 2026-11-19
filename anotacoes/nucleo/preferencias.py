@@ -11,12 +11,13 @@ import json
 import os
 
 from anotacoes.nucleo.modelos import validar_modelos
-from anotacoes.nucleo.pausas import horarios_validos
+from anotacoes.nucleo.pausas import horarios_validos, nomes_validos
 
 log = logging.getLogger(__name__)
 
 CHAVE_ALERTAS_PAUSA = "alertas_pausa"
 CHAVE_HORARIOS_PAUSA = "horarios_pausa"
+CHAVE_NOMES_PAUSA = "nomes_pausa"
 CHAVE_MODELOS = "modelos_descricao"
 CHAVE_PRIMEIRO_USO = "primeiro_uso_concluido"
 
@@ -49,7 +50,7 @@ class Preferencias:
 
     @property
     def alertas_pausa(self) -> bool:
-        """Alertas de pausa (14:40, 17:00 e 18:10) ligados? Padrão: sim.
+        """Alertas de pausa ligados? Padrão: sim.
         Valor inválido no arquivo (ex.: texto) volta ao padrão."""
         valor = self.dados.get(CHAVE_ALERTAS_PAUSA, True)
         return valor if isinstance(valor, bool) else True
@@ -67,6 +68,16 @@ class Preferencias:
     @horarios_pausa.setter
     def horarios_pausa(self, horarios: dict) -> None:
         self.dados[CHAVE_HORARIOS_PAUSA] = horarios_validos(horarios)
+
+    @property
+    def nomes_pausa(self) -> dict:
+        """{"nr17_1": "Pausa NR 17 (1ª)", ...} (ou os nomes que o usuário escolheu).
+        Ausente ou vazio volta ao nome padrão, item a item."""
+        return nomes_validos(self.dados.get(CHAVE_NOMES_PAUSA))
+
+    @nomes_pausa.setter
+    def nomes_pausa(self, nomes: dict) -> None:
+        self.dados[CHAVE_NOMES_PAUSA] = nomes_validos(nomes)
 
     @property
     def modelos_descricao(self) -> list:

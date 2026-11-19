@@ -1123,7 +1123,7 @@ check(("Ctrl + L") in [a for a, _ in __import__("anotacoes.interface.mixins.atal
 app._ciclo_pausas(); check(app._dialogo_pausa is None, "10:00: nenhum alerta")
 _Relogio.agora = _dt(2026, 11, 11, 14, 40, 0); bips0 = getattr(app, "bips", 0)
 app._ciclo_pausas()
-check(app._dialogo_pausa is not None and app._dialogo_pausa._title == "Pausa NR 17", "14:40:00: alerta 'Pausa NR 17' aparece")
+check(app._dialogo_pausa is not None and app._dialogo_pausa._title == "Pausa NR 17 (1ª)", "14:40:00: alerta com o nome da pausa aparece")
 app._ciclo_pausas(); check(len(app._pausas_avisadas) == 1, "o mesmo horário não avisa de novo")
 check(app.after_calls[-1][0] == pausas_gui.INTERVALO_MS, "laço se reagenda sozinho (after)")
 app._bipar(pausas_gui.BIPES); check(getattr(app, "bips", 0) > bips0, "sinal sonoro tocado")
@@ -1135,7 +1135,7 @@ _Relogio.agora = _dt(2026, 11, 11, 18, 10, 0); app._dialogo_pausa = None
 app._ciclo_pausas(); check(app._dialogo_pausa is None, "18:10 com alertas desligados: nada aparece")
 app.alternar_alertas_pausa()
 check(app.prefs.alertas_pausa is True, "religar os alertas")
-app._ciclo_pausas(); check(app._dialogo_pausa._title == "Pausa NR 17", "18:10: alerta aparece após religar (dentro da tolerância)")
+app._ciclo_pausas(); check(app._dialogo_pausa._title == "Pausa NR 17 (2ª)", "18:10: alerta aparece após religar (dentro da tolerância)")
 import json as _json
 check(_json.load(open(app.prefs.caminho, encoding="utf-8"))["alertas_pausa"] is True, "escolha gravada em preferencias.json")
 _DialogoPausaReal = pausas_gui.DialogoPausa
@@ -1158,8 +1158,23 @@ for chave, texto in (("nr17_1", "9h15"), ("lanche", "12:00"), ("nr17_2", "1530")
     dlg.entradas[chave].delete(0, "end"); dlg.entradas[chave].insert(0, texto)
 dlg._salvar()
 check(dlg.dead and app.prefs.horarios_pausa == {"nr17_1": "09:15", "lanche": "12:00", "nr17_2": "15:30"}, "salvar grava os novos horários")
-check("09:15, 12:00, 15:30" in app.toast._rotulo.cget("text"), "aviso confirma os horários salvos")
+check(all(h in app.toast._rotulo.cget("text") for h in ("09:15", "12:00", "15:30")), "aviso confirma os horários salvos")
 check(_json.load(open(app.prefs.caminho, encoding="utf-8"))["horarios_pausa"]["lanche"] == "12:00", "horários gravados em preferencias.json")
+# nome da pausa editável
+from anotacoes.nucleo.pausas import montar_pausas as pausas_nucleo_montar
+app.configurar_alertas_pausa(); dlg = app._dialogo_horarios
+check(sorted(dlg.entradas_nome) == ["lanche", "nr17_1", "nr17_2"] and dlg.entradas_nome["nr17_1"].get() == "Pausa NR 17 (1ª)", "janela mostra o nome de cada pausa, editável")
+dlg.entradas_nome["lanche"].delete(0, "end"); dlg._salvar()
+check("nome" in dlg.lbl_erro.cget("text").lower() and not dlg.dead, "nome vazio não salva")
+dlg.entradas_nome["lanche"].insert(0, "   Café   da   tarde  "); dlg._salvar()
+check(dlg.dead and app.prefs.nomes_pausa["lanche"] == "Café da tarde", "nome novo é salvo sem espaços sobrando")
+check(_json.load(open(app.prefs.caminho, encoding="utf-8"))["nomes_pausa"]["lanche"] == "Café da tarde", "nome gravado em preferencias.json")
+check("Café da tarde" in app.toast._rotulo.cget("text"), "aviso de salvar cita o nome novo")
+_p = [p for p in app._pausas if p.chave == "lanche"][0]
+check(_p.titulo == "Café da tarde" and "Café da tarde" in _p.mensagem and "lanche" not in _p.mensagem.lower(), "alerta usa o nome e uma mensagem coerente com ele")
+app.configurar_alertas_pausa(); dlg = app._dialogo_horarios; dlg._restaurar()
+check(dlg.entradas_nome["lanche"].get() == "Pausa para lanche", "restaurar padrão também devolve os nomes"); dlg.destroy(); app._dialogo_horarios = None
+app.prefs.nomes_pausa = {}; app._pausas = pausas_nucleo_montar(app.prefs.horarios_pausa, app.prefs.nomes_pausa)
 pausas_gui.DialogoPausa = _DialogoPausaReal
 app._dialogo_pausa = None; _Relogio.agora = _dt(2026, 11, 13, 14, 40, 0)
 app._ciclo_pausas(); check(app._dialogo_pausa is None, "horário antigo (14:40) deixa de avisar depois da mudança")
@@ -1334,11 +1349,68 @@ check(len(_chips) == len(_mod_regras.padrao()) + 1 and _chips[-1].cget("text") =
       "modelos: um balão por modelo e o balão 'Editar' no fim")
 check({c.cget("height") for c in _chips} == {modelos_gui.ALTURA_CHIP} and modelos_gui.ALTURA_CHIP <= 28,
       "modelos: todos os balões têm a mesma altura, compacta")
-check(all(c.cget("width") == max(48, 7 * len(c.cget("text")) + modelos_gui.MARGEM_CHIP) for c in _chips[:-1]),
+check(all(c.cget("width") == max(48, 7 * len(c.titulo) + modelos_gui.MARGEM_CHIP) for c in _chips[:-1]),
       "modelos: largura = texto + margem pequena (e não os 140 fixos de antes)")
 check(len({c.cget("width") for c in _chips[:-1]}) > 1, "modelos: a largura acompanha o texto de cada balão")
 _todos_textos = [t for t in textos(app.paginas["novo"]) if t]
 check("Modelos:" not in _todos_textos and "Editar modelos" not in _todos_textos, "modelos: sem o rótulo 'Modelos:' (só os balões)")
+# janelas abrem centralizadas (e continuam livres para mover)
+class _Pai:
+    def __init__(s, x, y, w, h, estado="normal"): s.x, s.y, s.w, s.h, s.est = x, y, w, h, estado
+    def update_idletasks(s): pass
+    def state(s): return s.est
+    def winfo_rootx(s): return s.x
+    def winfo_rooty(s): return s.y
+    def winfo_width(s): return s.w
+    def winfo_height(s): return s.h
+    def winfo_pointerx(s): return 2900
+    def winfo_pointery(s): return 500
+    def winfo_screenwidth(s): return 1920
+    def winfo_screenheight(s): return 1080
+class _Jan:
+    _geo = None
+    def _get_window_scaling(s): return 1.0
+    def geometry(s, g): s._geo = g
+_lim0 = widgets.limites_da_tela
+try:
+    widgets.limites_da_tela = lambda j, x, y: (1920, 0, 3840, 1040) if x >= 1920 else (0, 0, 1920, 1040)
+    j = _Jan(); widgets.centralizar(j, _Pai(100, 100, 1000, 700), 400, 300)
+    check(j._geo == "400x300+400+300", "centraliza no meio da janela principal")
+    j = _Jan(); widgets.centralizar(j, _Pai(2000, 100, 1000, 700), 400, 300)
+    check(j._geo == "400x300+2300+300", "janela principal no 2º monitor: diálogo abre no meio dela")
+    j = _Jan(); widgets.centralizar(j, _Pai(-32000, -32000, 160, 28, "iconic"), 460, 280)
+    check(j._geo == "460x280+2650+380", "principal minimizada: alerta centraliza no monitor do mouse")
+    j = _Jan(); widgets.centralizar(j, _Pai(1700, 900, 1000, 700), 600, 500)
+    x, y = [int(v) for v in j._geo.split("+")[1:]]
+    check(1920 <= x and x + 600 <= 3840 and y + 500 <= 1040, "diálogo grande nunca sai do monitor")
+finally:
+    widgets.limites_da_tela = _lim0
+# arrastar para mudar a ordem
+_fa = widgets.FluxoBotoes(app._frm_modelos, ao_reordenar=lambda ordem: _ordens.append(ordem))
+_ordens, _cliques = [], []
+_cs = []
+for i in range(4):
+    _c = ctk.CTkFrame(_fa, width=100, height=26); _c.rootx, _c.rooty = i * 110, 0
+    _c.winfo_rootx = lambda c=_c: c.rootx; _c.winfo_rooty = lambda c=_c: c.rooty
+    _c.winfo_width = lambda: 100; _c.winfo_height = lambda: 26
+    _fa.adicionar(_c, movel=True, chave=i, ao_clicar=lambda i=i: _cliques.append(i)); _cs.append(_c)
+class _Ev:
+    def __init__(s, x, y): s.x_root, s.y_root = x, y
+_fa._pressionou(_cs[0], _Ev(50, 10)); _fa._soltou(_Ev(50, 10))
+check(_cliques == [0] and not _ordens, "balão: clique sem arrastar usa o modelo")
+_fa._pressionou(_cs[0], _Ev(50, 10)); _fa._moveu(_Ev(52, 11))
+check(_fa._arrastando is None, "balão: movimento mínimo ainda é clique")
+_fa._moveu(_Ev(280, 12)); _fa._soltou(_Ev(280, 12))
+check(_ordens == [[1, 2, 0, 3]] and _cliques == [0], "balão: arrastar muda a ordem e não dispara o modelo")
+_fa._pressionou(_cs[3], _Ev(340, 10)); _fa._moveu(_Ev(20, 10)); _fa._soltou(_Ev(20, 10))
+check(_ordens[-1].index(3) < 3, "balão: arrastar para trás move o balão para antes")
+# ordem persistida
+_antes = [m["titulo"] for m in app.prefs.modelos_descricao]
+app._reordenar_modelos([1, 0] + list(range(2, len(_antes))))
+check([m["titulo"] for m in app.prefs.modelos_descricao][:2] == [_antes[1], _antes[0]], "modelos: nova ordem gravada nas preferências")
+app._reordenar_modelos(list(range(len(_antes)))); app._reordenar_modelos([0, 0])
+check([m["titulo"] for m in app.prefs.modelos_descricao][:2] == [_antes[1], _antes[0]], "modelos: ordem inválida/igual é ignorada")
+app.prefs.modelos_descricao = [{"titulo": t, "texto": x} for t, x in zip(_antes, [m["texto"] for m in app.prefs.modelos_descricao])]
 # adaptação à largura da janela
 _fl = widgets.FluxoBotoes(app._frm_modelos)
 _bs = [ctk.CTkButton(_fl, text=f"M{i}", width=100) for i in range(6)]

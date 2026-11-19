@@ -7,7 +7,7 @@ from anotacoes.nucleo.preferencias import Preferencias
 from anotacoes.nucleo import modelos, preferencias
 from datetime import date, datetime
 from anotacoes.nucleo.pausas import (HORARIOS_PADRAO, PAUSAS, TOLERANCIA_SEGUNDOS, horarios_validos,
-                                     interpretar_horario, marcar_avisada, montar_pausas, pausa_devida)
+                                     interpretar_horario, marcar_avisada, mensagem_da_pausa, montar_pausas, nomes_validos, pausa_devida)
 
 
 def escrever(caminho, texto):
@@ -174,6 +174,32 @@ class TestPausas(unittest.TestCase):
         depois = montar_pausas({"nr17_1": "14:50"})
         self.assertIsNone(pausa_devida(em(14, 40, 30), avisadas, depois))
         self.assertEqual(pausa_devida(em(14, 50), avisadas, depois).chave, "nr17_1")
+
+    def test_nomes_padrao_e_personalizados(self):
+        self.assertEqual([p.nome for p in montar_pausas()],
+                         ["Pausa NR 17 (1ª)", "Pausa para lanche", "Pausa NR 17 (2ª)"])
+        pausas = montar_pausas(None, {"lanche": "  Café   da tarde "})
+        self.assertEqual(pausas[1].nome, "Café da tarde")
+        self.assertEqual(pausas[1].titulo, "Café da tarde")        # título do aviso = nome na janela
+        self.assertIn("Café da tarde", pausas[1].mensagem)
+
+    def test_nome_invalido_volta_ao_padrao(self):
+        r = nomes_validos({"lanche": "   ", "nr17_1": 5, "extra": "x"})
+        self.assertEqual(r["lanche"], "Pausa para lanche")
+        self.assertEqual(r["nr17_1"], "Pausa NR 17 (1ª)")
+        self.assertEqual(set(r), {"nr17_1", "lanche", "nr17_2"})
+        self.assertEqual(len(nomes_validos({"lanche": "x" * 200})["lanche"]), 40)
+
+    def test_mensagem_coerente_com_o_nome(self):
+        self.assertIn("NR 17", mensagem_da_pausa("nr17_1", "Pausa NR 17 (1ª)"))
+        self.assertNotIn("NR 17", mensagem_da_pausa("nr17_1", "Alongamento"))   # nome trocado: sem dica de NR 17
+
+    def test_preferencias_guardam_nomes(self):
+        d = tempfile.mkdtemp()
+        p = Preferencias(os.path.join(d, "p.json"))
+        p.nomes_pausa = {"lanche": "Café"}
+        p.salvar()
+        self.assertEqual(Preferencias(os.path.join(d, "p.json")).nomes_pausa["lanche"], "Café")
 
 
 if __name__ == "__main__":

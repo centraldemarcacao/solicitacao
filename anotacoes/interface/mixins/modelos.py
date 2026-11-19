@@ -42,7 +42,7 @@ class DialogoModelos(ctk.CTkToplevel):
                      text_color=T.TEXTO, anchor="w").pack(anchor="w")
         alinhar_esquerda(ctk.CTkLabel(
             corpo, text=f"Frases prontas para os pedidos mais comuns (até {regras.MAX_MODELOS}). "
-                        "Aparecem como botões no formulário.",
+                        "Aparecem como balões no formulário; arraste-os lá para mudar a ordem.",
             font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w", wraplength=570,
         )).pack(anchor="w", pady=(4, 10))
 
@@ -162,16 +162,14 @@ class ModelosMixin:
         compactos, que quebra de linha conforme a largura da janela."""
         for filho in self._frm_modelos.winfo_children():
             filho.destroy()
-        fluxo = FluxoBotoes(self._frm_modelos, espaco=6, ao_mudar_linhas=self._linhas_de_modelos_mudaram)
+        fluxo = FluxoBotoes(self._frm_modelos, espaco=6, ao_mudar_linhas=self._linhas_de_modelos_mudaram,
+                            ao_reordenar=self._reordenar_modelos)
         fluxo.pack(fill="x")
         self._fluxo_modelos = fluxo
-        for m in self.prefs.modelos_descricao:
-            fluxo.adicionar(ctk.CTkButton(
-                fluxo, text=m["titulo"], height=ALTURA_CHIP, corner_radius=ALTURA_CHIP // 2,
-                width=max(48, self._largura_texto(m["titulo"]) + MARGEM_CHIP),
-                font=fonte(FONTE_CHIP, "bold"), fg_color=T.TEAL_CLARO, text_color=T.TEAL_ESCURO,
-                hover_color=T.TEAL_BORDA, border_width=1, border_color=T.TEAL_BORDA,
-                command=lambda t=m["texto"]: self._usar_modelo(t)))
+        for indice, m in enumerate(self.prefs.modelos_descricao):
+            chip, partes = self._criar_chip(fluxo, m["titulo"])
+            fluxo.adicionar(chip, movel=True, chave=indice, partes=partes,
+                            ao_clicar=lambda t=m["texto"]: self._usar_modelo(t))
         fluxo.adicionar(ctk.CTkButton(
             fluxo, text="Editar", height=ALTURA_CHIP, corner_radius=ALTURA_CHIP // 2,
             width=self._largura_texto("Editar", "normal") + MARGEM_CHIP + 16,
@@ -179,6 +177,33 @@ class ModelosMixin:
             font=fonte(FONTE_CHIP), fg_color="transparent", text_color=T.TEXTO_SUAVE,
             hover_color=T.FUNDO, border_width=1, border_color=T.BORDA_FORTE,
             command=self.gerenciar_modelos))
+
+    def _criar_chip(self, pai, titulo: str):
+        """Balão de modelo: quadro arredondado + rótulo. Não é um CTkButton porque ele dispara
+        no clique inicial e não daria para distinguir clique de arrasto (mover o balão)."""
+        chip = ctk.CTkFrame(
+            pai, height=ALTURA_CHIP, corner_radius=ALTURA_CHIP // 2, fg_color=T.TEAL_CLARO,
+            border_width=1, border_color=T.TEAL_BORDA,
+            width=max(48, self._largura_texto(titulo) + MARGEM_CHIP))
+        chip.pack_propagate(False)
+        chip.titulo = titulo
+        rotulo = ctk.CTkLabel(chip, text=titulo, font=fonte(FONTE_CHIP, "bold"),
+                              text_color=T.TEAL_ESCURO, fg_color="transparent")
+        rotulo.place(relx=0.5, rely=0.5, anchor="center")
+        for parte in (chip, rotulo):
+            parte.bind("<Enter>", lambda _e, c=chip: c.configure(fg_color=T.TEAL_BORDA))
+            parte.bind("<Leave>", lambda _e, c=chip: c.configure(fg_color=T.TEAL_CLARO))
+        return chip, (rotulo,)
+
+    def _reordenar_modelos(self, ordem: list) -> None:
+        """Chamado ao soltar um balão arrastado: grava a nova ordem dos modelos."""
+        atuais = self.prefs.modelos_descricao
+        if sorted(ordem) != list(range(len(atuais))) or ordem == list(range(len(atuais))):
+            return
+        self.prefs.modelos_descricao = [atuais[i] for i in ordem]
+        if not self.prefs.salvar():
+            self.toast.mostrar("Não foi possível gravar a nova ordem dos modelos.", "erro", 5000)
+        self.after(1, self._montar_modelos)      # recria com os índices atualizados
 
     def _linhas_de_modelos_mudaram(self) -> None:
         """Mais ou menos linhas de balões mudam a altura do formulário: reconfere o mínimo."""

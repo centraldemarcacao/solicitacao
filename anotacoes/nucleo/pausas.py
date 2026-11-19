@@ -24,17 +24,23 @@ from typing import Optional
 # perdeu o sentido ("pausa das 14:40" às 16:00) e é descartado.
 TOLERANCIA_SEGUNDOS = 120
 
+MAX_NOME = 40            # tamanho máximo do nome de uma pausa
+
 _MSG_NR17 = ("Hora da pausa da NR 17. Levante-se, alongue-se e descanse a vista e as mãos "
              "por alguns minutos.")
 _MSG_LANCHE = "Hora da pausa para o lanche. Aproveite para comer e se hidratar."
+_MSG_GENERICA = "Hora da pausa: {nome}. Faça uma pausa e volte quando estiver pronto(a)."
 
-# (chave, horário padrão, tipo, título do aviso, nome no formulário, mensagem)
+# (chave, horário padrão, tipo, título padrão, nome padrão, mensagem padrão).
+# O nome é o que a pessoa vê na janela "Alertas de pausa" e também o título do aviso;
+# ela pode trocá-lo (a mensagem acompanha o nome: ver `mensagem_da_pausa`).
 MODELOS = (
-    ("nr17_1", "14:40", "nr17", "Pausa NR 17", "Pausa NR 17 (1ª)", _MSG_NR17),
+    ("nr17_1", "14:40", "nr17", "Pausa NR 17 (1ª)", "Pausa NR 17 (1ª)", _MSG_NR17),
     ("lanche", "17:00", "lanche", "Pausa para lanche", "Pausa para lanche", _MSG_LANCHE),
-    ("nr17_2", "18:10", "nr17", "Pausa NR 17", "Pausa NR 17 (2ª)", _MSG_NR17),
+    ("nr17_2", "18:10", "nr17", "Pausa NR 17 (2ª)", "Pausa NR 17 (2ª)", _MSG_NR17),
 )
 HORARIOS_PADRAO = {chave: padrao for chave, padrao, *_ in MODELOS}
+NOMES_PADRAO = {chave: nome for chave, _p, _t, _ti, nome, _m in MODELOS}
 
 _FORMATOS_HORARIO = (
     re.compile(r"(\d{1,2})\s*[:hH.]\s*(\d{2})"),    # 14:40, 14h40, 14.40
@@ -79,12 +85,36 @@ def horarios_validos(brutos) -> dict:
     return resultado
 
 
-def montar_pausas(horarios=None) -> tuple:
-    """Pausas do dia com os horários informados (None = padrão)."""
-    valid = horarios_validos(horarios)
+def limpar_nome(texto) -> str:
+    """Nome de pausa sem espaços sobrando e com no máximo MAX_NOME caracteres ('' se inválido)."""
+    if not isinstance(texto, str):
+        return ""
+    return " ".join(texto.split())[:MAX_NOME].strip()
+
+
+def nomes_validos(brutos) -> dict:
+    """{chave: nome} completo: o que for ausente ou vazio volta ao nome padrão."""
+    brutos = brutos if isinstance(brutos, dict) else {}
+    return {chave: limpar_nome(brutos.get(chave)) or NOMES_PADRAO[chave] for chave in NOMES_PADRAO}
+
+
+def mensagem_da_pausa(chave: str, nome: str) -> str:
+    """Texto do aviso. Com o nome padrão, a dica específica (NR 17 / lanche); com um nome
+    escolhido pela pessoa, uma frase neutra que cita esse nome (para não dizer "NR 17"
+    numa pausa que ela chamou de outra coisa)."""
+    for chave_m, _p, _t, _ti, nome_padrao, mensagem in MODELOS:
+        if chave_m == chave and nome == nome_padrao:
+            return mensagem
+    return _MSG_GENERICA.format(nome=nome)
+
+
+def montar_pausas(horarios=None, nomes=None) -> tuple:
+    """Pausas do dia com os horários e nomes informados (None = padrão)."""
+    valid, nomes = horarios_validos(horarios), nomes_validos(nomes)
     return tuple(
-        Pausa(chave, interpretar_horario(valid[chave]), tipo, titulo, nome, mensagem)
-        for chave, _padrao, tipo, titulo, nome, mensagem in MODELOS)
+        Pausa(chave, interpretar_horario(valid[chave]), tipo, nomes[chave], nomes[chave],
+              mensagem_da_pausa(chave, nomes[chave]))
+        for chave, _padrao, tipo, _titulo, _nome, _msg in MODELOS)
 
 
 PAUSAS = montar_pausas()

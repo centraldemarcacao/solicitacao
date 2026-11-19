@@ -23,8 +23,9 @@ from anotacoes import theme as T
 from anotacoes.interface.icons import icone
 from anotacoes.interface.widgets import alinhar_esquerda, centralizar, fonte
 from anotacoes.nucleo import inicializacao
-from anotacoes.nucleo.pausas import (HORARIOS_PADRAO, MODELOS, interpretar_horario,
-                                     marcar_avisada, montar_pausas, pausa_devida)
+from anotacoes.nucleo.pausas import (HORARIOS_PADRAO, MODELOS, NOMES_PADRAO,
+                                     interpretar_horario, limpar_nome, marcar_avisada,
+                                     montar_pausas, pausa_devida)
 
 log = logging.getLogger(__name__)
 
@@ -109,14 +110,15 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
     """Janela "Alertas de pausa": liga/desliga e horários. Não é modal, para que um
     aviso que chegue enquanto ela está aberta possa ser fechado normalmente."""
 
-    def __init__(self, pai, ativo: bool, horarios: dict, ao_salvar, inicio_windows=None) -> None:
+    def __init__(self, pai, ativo: bool, horarios: dict, ao_salvar, inicio_windows=None,
+                 nomes: dict = None) -> None:
         """`inicio_windows`: None = indisponível (só no .exe); True/False = estado atual.
-        `ao_salvar(ativo, horarios, inicio_windows)`."""
+        `ao_salvar(ativo, horarios, inicio_windows, nomes)`. `nomes`: {chave: nome} (None = padrão)."""
         super().__init__(pai, fg_color=T.CARD)
         self._ao_salvar = ao_salvar
         self.title("Alertas de pausa")
         self.resizable(False, False)
-        centralizar(self, pai, 480, 600)
+        centralizar(self, pai, 520, 640)
         self.transient(pai)
 
         ctk.CTkFrame(self, fg_color=T.TEAL, height=6, corner_radius=0).pack(fill="x")
@@ -127,8 +129,9 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
                      text_color=T.TEXTO, anchor="w").pack(anchor="w")
         alinhar_esquerda(ctk.CTkLabel(
             corpo, text="Uma janela com sinal sonoro avisa nos horários abaixo, todos os dias. "
-                        "Use o formato 14:40.",
-            font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w", wraplength=410,
+                        "Você pode mudar o nome e o horário de cada pausa (formato 14:40). "
+                        "O nome aparece no título do aviso.",
+            font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w", wraplength=450,
         )).pack(anchor="w", pady=(4, 14))
 
         self.chk_ativo = ctk.CTkCheckBox(
@@ -138,18 +141,30 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
         (self.chk_ativo.select if ativo else self.chk_ativo.deselect)()
         self.chk_ativo.pack(anchor="w", pady=(0, 12))
 
+        nomes = nomes or {}
+        cabecalho = ctk.CTkFrame(corpo, fg_color="transparent")
+        cabecalho.pack(fill="x")
+        ctk.CTkLabel(cabecalho, text="Horário", width=96, font=fonte(12, "bold"),
+                     text_color=T.TEXTO_SUAVE, anchor="w").pack(side="right")
+        ctk.CTkLabel(cabecalho, text="Nome da pausa", font=fonte(12, "bold"),
+                     text_color=T.TEXTO_SUAVE, anchor="w").pack(side="left")
         self.entradas = {}
-        for chave, _padrao, _tipo, _titulo, nome, _msg in MODELOS:
+        self.entradas_nome = {}
+        for chave, _padrao, _tipo, _titulo, nome_padrao, _msg in MODELOS:
             linha = ctk.CTkFrame(corpo, fg_color="transparent")
             linha.pack(fill="x", pady=5)
-            ctk.CTkLabel(linha, text=nome, font=fonte(14), text_color=T.TEXTO,
-                         anchor="w").pack(side="left")
             entrada = ctk.CTkEntry(
                 linha, width=96, height=40, font=fonte(15, "bold"), fg_color=T.SUPERFICIE,
                 border_color=T.BORDA_FORTE, text_color=T.TEXTO)
             entrada.pack(side="right")
             entrada.insert(0, horarios.get(chave, HORARIOS_PADRAO[chave]))
             self.entradas[chave] = entrada
+            nome = ctk.CTkEntry(
+                linha, height=40, font=fonte(14), fg_color=T.SUPERFICIE,
+                border_color=T.BORDA_FORTE, text_color=T.TEXTO)
+            nome.pack(side="left", fill="x", expand=True, padx=(0, 12))
+            nome.insert(0, nomes.get(chave) or nome_padrao)
+            self.entradas_nome[chave] = nome
 
         self.chk_inicio = None
         if inicio_windows is None:
@@ -204,27 +219,34 @@ class DialogoHorariosPausa(ctk.CTkToplevel):
         for chave, entrada in self.entradas.items():
             entrada.delete(0, "end")
             entrada.insert(0, HORARIOS_PADRAO[chave])
+        for chave, entrada in self.entradas_nome.items():
+            entrada.delete(0, "end")
+            entrada.insert(0, NOMES_PADRAO[chave])
         self.lbl_erro.configure(text="")
 
     def _validar(self):
-        """Retorna ({chave: "HH:MM"}, None) ou (None, mensagem de erro)."""
-        horarios = {}
-        for chave, _padrao, _tipo, _titulo, nome, _msg in MODELOS:
+        """Retorna (horarios, nomes, None) ou (None, None, mensagem de erro)."""
+        horarios, nomes = {}, {}
+        for chave, _padrao, _tipo, _titulo, nome_padrao, _msg in MODELOS:
+            nome = limpar_nome(self.entradas_nome[chave].get())
+            if not nome:
+                return None, None, f"Informe o nome da pausa das {self.entradas[chave].get().strip()}."
+            nomes[chave] = nome
             hora = interpretar_horario(self.entradas[chave].get())
             if hora is None:
-                return None, f"Horário inválido em \"{nome}\". Use o formato 14:40."
+                return None, None, f"Horário inválido em \"{nome}\". Use o formato 14:40."
             horarios[chave] = hora.strftime("%H:%M")
         if len(set(horarios.values())) < len(horarios):
-            return None, "Dois alertas estão no mesmo horário. Escolha horários diferentes."
-        return horarios, None
+            return None, None, "Dois alertas estão no mesmo horário. Escolha horários diferentes."
+        return horarios, nomes, None
 
     def _salvar(self) -> None:
-        horarios, erro = self._validar()
+        horarios, nomes, erro = self._validar()
         self.lbl_erro.configure(text=erro or "")
         if erro:
             return
         inicio = None if self.chk_inicio is None else bool(self.chk_inicio.get())
-        self._ao_salvar(bool(self.chk_ativo.get()), horarios, inicio)
+        self._ao_salvar(bool(self.chk_ativo.get()), horarios, inicio, nomes)
         self.destroy()
 
 
@@ -238,7 +260,7 @@ class PausasMixin:
         self._pausas_avisadas = set()   # (data, chave, "HH:MM") já avisados
         self._dialogo_pausa = None
         self._dialogo_horarios = None
-        self._pausas = montar_pausas(self.prefs.horarios_pausa)
+        self._pausas = montar_pausas(self.prefs.horarios_pausa, self.prefs.nomes_pausa)
         self.after(INTERVALO_MS, self._ciclo_pausas)
 
     def _ciclo_pausas(self) -> None:
@@ -311,13 +333,15 @@ class PausasMixin:
         inicio = inicializacao.ativo() if inicializacao.suportado() else None
         self._dialogo_horarios = DialogoHorariosPausa(
             self, self.prefs.alertas_pausa, self.prefs.horarios_pausa,
-            self._aplicar_alertas_pausa, inicio)
+            self._aplicar_alertas_pausa, inicio, self.prefs.nomes_pausa)
 
-    def _aplicar_alertas_pausa(self, ativo: bool, horarios: dict, inicio=None) -> None:
+    def _aplicar_alertas_pausa(self, ativo: bool, horarios: dict, inicio=None, nomes=None) -> None:
         self.prefs.alertas_pausa = ativo
         self.prefs.horarios_pausa = horarios
+        if nomes is not None:
+            self.prefs.nomes_pausa = nomes
         guardou = self.prefs.salvar()
-        self._pausas = montar_pausas(self.prefs.horarios_pausa)
+        self._pausas = montar_pausas(self.prefs.horarios_pausa, self.prefs.nomes_pausa)
         self._atualizar_botao_pausas()
         if inicio is not None and inicio != inicializacao.ativo():
             try:
@@ -331,7 +355,8 @@ class PausasMixin:
                                "aviso", 6000)
         elif ativo:
             self.toast.mostrar("Alertas de pausa salvos: "
-                               + ", ".join(p.rotulo for p in self._pausas) + ".", "sucesso", 4500)
+                               + "; ".join(f"{p.rotulo} {p.nome}" for p in self._pausas) + ".",
+                               "sucesso", 5500)
         else:
             self.toast.mostrar("Horários salvos. Os alertas de pausa estão desativados.",
                                "aviso", 4500)
