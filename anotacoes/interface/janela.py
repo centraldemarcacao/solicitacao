@@ -304,10 +304,18 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             altura = max(MINIMO_ALTURA, min(altura, int(tela_a)))
             posicao = ""
             x, y = info.get("x"), info.get("y")
-            if (isinstance(x, int) and isinstance(y, int)
-                    and -8 <= x <= self.winfo_screenwidth() - 200
-                    and 0 <= y <= self.winfo_screenheight() - 150):
-                posicao = f"+{x}+{y}"
+            if isinstance(x, int) and isinstance(y, int):
+                # vale qualquer ponto da área virtual (vários monitores, inclusive negativos)
+                try:
+                    vx, vy = self.winfo_vrootx(), self.winfo_vrooty()
+                    vw, vh = self.winfo_vrootwidth(), self.winfo_vrootheight()
+                except Exception:
+                    vx, vy = 0, 0
+                    vw, vh = self.winfo_screenwidth(), self.winfo_screenheight()
+                if vw <= 0 or vh <= 0:
+                    vw, vh = self.winfo_screenwidth(), self.winfo_screenheight()
+                if vx - 8 <= x <= vx + vw - 200 and vy <= y <= vy + vh - 150:
+                    posicao = f"+{x}+{y}"
             self.geometry(f"{largura}x{altura}{posicao}")
             if info.get("max") and not self._minimizado:
                 self.after(80, lambda: self.state("zoomed"))

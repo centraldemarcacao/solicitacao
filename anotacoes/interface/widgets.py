@@ -47,6 +47,55 @@ def alinhar_esquerda(rotulo):
 # ----------------------------------------------------------------------
 # Utilidades de janela
 # ----------------------------------------------------------------------
+def limites_da_tela(janela, x: int, y: int) -> tuple:
+    """Área útil (esq, topo, dir, base) do monitor que contém o ponto (x, y).
+
+    No Windows consulta o monitor real (barra de tarefas descontada), o que
+    funciona com vários monitores, inclusive à esquerda/acima do principal
+    (coordenadas negativas). Sem isso, usa a área virtual do Tk e, por fim,
+    a tela principal."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class _Info(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                        ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+        usuario = ctypes.windll.user32
+        usuario.MonitorFromPoint.restype = wintypes.HANDLE
+        monitor = usuario.MonitorFromPoint(wintypes.POINT(int(x), int(y)), 2)
+        info = _Info()
+        info.cbSize = ctypes.sizeof(_Info)
+        if monitor and usuario.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            r = info.rcWork
+            return (r.left, r.top, r.right, r.bottom)
+    except Exception:
+        log.debug("Monitor real indisponível; usando a área virtual", exc_info=True)
+    try:
+        esq, topo = janela.winfo_vrootx(), janela.winfo_vrooty()
+        larg, alt = janela.winfo_vrootwidth(), janela.winfo_vrootheight()
+        if larg > 0 and alt > 0:
+            return (esq, topo, esq + larg, topo + alt - 48)
+    except Exception:
+        log.debug("Área virtual indisponível", exc_info=True)
+    return (0, 0, janela.winfo_screenwidth(), janela.winfo_screenheight() - 48)
+
+
+def ajustar_ao_monitor(janela, x: int, y: int, w: int, h: int, margem: int = 8,
+                       abrir_para_cima: bool = False) -> tuple:
+    """Devolve (x, y) mantendo a janela w×h dentro do monitor do ponto (x, y)."""
+    esq, topo, dir_, base = limites_da_tela(janela, x, y)
+    if x + w > dir_ - margem:
+        x = dir_ - w - margem
+    if x < esq + margem:
+        x = esq + margem
+    if y + h > base - 4:
+        y = y - h if abrir_para_cima else base - h - 4
+    if y < topo + 4:
+        y = topo + 4
+    return int(x), int(y)
+
+
 def centralizar(janela, pai, largura: int, altura: int) -> None:
     """Posiciona `janela` no centro de `pai` (considera a escala do Windows)."""
     try:
@@ -57,7 +106,9 @@ def centralizar(janela, pai, largura: int, altura: int) -> None:
             fator = 1.0
         x = pai.winfo_rootx() + (pai.winfo_width() - int(largura * fator)) // 2
         y = pai.winfo_rooty() + (pai.winfo_height() - int(altura * fator)) // 2
-        janela.geometry(f"{largura}x{altura}+{max(0, x)}+{max(0, y)}")
+        w, h = int(largura * fator), int(altura * fator)
+        x, y = ajustar_ao_monitor(janela, x + w // 2, y + h // 2, w, h, margem=0)
+        janela.geometry(f"{largura}x{altura}+{x}+{y}")
     except Exception:
         janela.geometry(f"{largura}x{altura}")
 
@@ -756,12 +807,10 @@ class MenuPopup(tk.Toplevel):
             log.debug("Medida real do menu indisponível; usando a estimada", exc_info=True)
         if ancora == "dir":
             x -= w
-        tela_w, tela_h = self.winfo_screenwidth(), self.winfo_screenheight()
-        if x + w > tela_w - 8:
-            x = tela_w - w - 8
-        if y + h > tela_h - 48:             # sem espaço embaixo (barra de tarefas): abre para cima
-            y = y - h
-        self.geometry(f"{w}x{h}+{max(8, int(x))}+{max(8, int(y))}")
+        # monitor do clique (não o principal); sem espaço embaixo, abre para cima
+        x, y = ajustar_ao_monitor(self, int(x) + (w if ancora == "dir" else 0), int(y),
+                                  w, h, abrir_para_cima=True)
+        self.geometry(f"{w}x{h}+{x}+{y}")
 
     # --- interação -----------------------------------------------------
     def _capturar(self, tentativas: int = 5) -> None:

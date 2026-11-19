@@ -100,6 +100,10 @@ class Widget:
     def winfo_rooty(self): return 0
     def winfo_fpixels(self, v): return 96.0 * SCREEN['dpi']
     def winfo_screenwidth(self): return SCREEN['w']
+    def winfo_vrootx(self): return SCREEN.get('vx', 0)
+    def winfo_vrooty(self): return SCREEN.get('vy', 0)
+    def winfo_vrootwidth(self): return SCREEN.get('vw', SCREEN['w'])
+    def winfo_vrootheight(self): return SCREEN.get('vh', SCREEN['h'] if 'h' in SCREEN else 1080)
     def winfo_screenheight(self): return SCREEN['h']
     def update_idletasks(self): pass
     def attributes(self, *a): pass
@@ -569,6 +573,24 @@ check(m.dead and app._menu_popup is None, "Esc fecha o menu")
 
 # escolher uma opção fecha o menu e executa o comando depois
 chamadas = []
+# --- vários monitores: o menu fica no monitor do clique ---
+from anotacoes.interface import widgets as _W
+_orig_lim = _W.limites_da_tela
+try:
+    _W.limites_da_tela = lambda j, x, y: (1920, 0, 3840, 1040) if x >= 1920 else (0, 0, 1920, 1040)
+    mm = MenuPopup.abrir(app, 2500, 300, [ItemMenu("A", lambda: None)])
+    gx = int(mm._geo.split("+")[1]); check(gx == 2500, "2º monitor: menu abre onde clicou (não volta ao principal)"); mm._fechar()
+    mm = MenuPopup.abrir(app, 3800, 300, [ItemMenu("A", lambda: None)])
+    gx = int(mm._geo.split("+")[1]); check(1920 <= gx and gx + int(mm._geo.split("x")[0]) <= 3840, "2º monitor: borda direita prende no próprio monitor"); mm._fechar()
+    _W.limites_da_tela = lambda j, x, y: (-1920, 0, 0, 1040)
+    mm = MenuPopup.abrir(app, -500, 300, [ItemMenu("A", lambda: None)])
+    check("+-" in mm._geo.split("x", 1)[1], "monitor à esquerda (coordenada negativa) preservado"); mm._fechar()
+    _W.limites_da_tela = lambda j, x, y: (0, 0, 1920, 1040)
+    mm = MenuPopup.abrir(app, 100, 1030, [ItemMenu("A", lambda: None)])
+    gy = int(mm._geo.split("+")[-1]); check(gy < 1030, "sem espaço embaixo: abre para cima"); mm._fechar()
+    check(_W.ajustar_ao_monitor(app, 5000, 5000, 100, 100) == (1920 - 108, 1040 - 104), "ajustar_ao_monitor prende nos limites")
+finally:
+    _W.limites_da_tela = _orig_lim
 m2 = MenuPopup.abrir(app, 10, 10, [ItemMenu("A", lambda: chamadas.append("A"), "eye"), SEPARADOR,
                                    ItemMenu("B", lambda: chamadas.append("B"), "trash", perigo=True)],
                      titulo="2 registros selecionados")
@@ -1092,6 +1114,11 @@ class _Relogio:
 pausas_gui.datetime = _Relogio
 pausas_gui._tocar_sinal = lambda j: j.bell()
 check(app._btn_pausas.mapped and app.prefs.alertas_pausa, "botão de sino na barra lateral (alertas ligados por padrão)")
+check(app._btn_pausas._cfg.get("image") is not None and app._btn_pausas.mapped, "sino: ícone já criado junto com o botão")
+_ant = app.prefs.alertas_pausa
+app.prefs.alertas_pausa = False; app._atualizar_botao_pausas()
+check(app._btn_pausas._cfg.get("image") is not None, "sino: ícone também com alertas desligados")
+app.prefs.alertas_pausa = _ant; app._atualizar_botao_pausas()
 check(("Ctrl + L") in [a for a, _ in __import__("anotacoes.interface.mixins.atalhos", fromlist=["x"]).ATALHOS] and "<Control-l>" in app.binds, "Ctrl+L registrado e listado em F1")
 app._ciclo_pausas(); check(app._dialogo_pausa is None, "10:00: nenhum alerta")
 _Relogio.agora = _dt(2026, 11, 11, 14, 40, 0); bips0 = getattr(app, "bips", 0)

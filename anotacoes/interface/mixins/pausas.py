@@ -277,21 +277,25 @@ class PausasMixin:
     # ==================================================================
     # Liga / desliga
     # ==================================================================
+    def _icone_sino(self):
+        return icone("bell" if self.prefs.alertas_pausa else "bell_off", T.NAV_TEXTO, 18)
+
     def _montar_botao_pausas(self, pai) -> None:
-        """Botão de sino no canto do cartão do relógio (refeito junto com a barra lateral)."""
+        """Botão de sino no canto do cartão do relógio (refeito junto com a barra lateral).
+
+        A imagem vai no construtor, como nos demais botões de ícone da barra: um CTkButton
+        criado sem imagem e com texto vazio não reserva espaço para ela, e o `configure`
+        posterior deixava o botão vazio."""
         self._btn_pausas = ctk.CTkButton(
-            pai, text="", width=38, height=30, fg_color="transparent",
-            border_width=1, border_color=T.NAV_LINHA, hover_color=T.NAVY_ATIVO,
-            command=self.configurar_alertas_pausa)
+            pai, text="", width=34, height=30, image=self._icone_sino(),
+            fg_color="transparent", border_width=1, border_color=T.NAV_LINHA,
+            hover_color=T.NAVY_ATIVO, command=self.configurar_alertas_pausa)
         self._btn_pausas.place(relx=1.0, rely=0.5, anchor="e", x=-14)
-        self._atualizar_botao_pausas()
 
     def _atualizar_botao_pausas(self) -> None:
         botao = getattr(self, "_btn_pausas", None)
-        if botao is None:
-            return
-        ativo = self.prefs.alertas_pausa
-        botao.configure(image=icone("bell" if ativo else "bell_off", T.NAV_TEXTO, 18))
+        if botao is not None:
+            botao.configure(image=self._icone_sino())
 
     def configurar_alertas_pausa(self) -> None:
         """Abre a janela com liga/desliga e os três horários."""
