@@ -686,6 +686,86 @@ class DialogoConfirmacao(ctk.CTkToplevel):
         return dialogo.resultado
 
 
+class DialogoPrazos(ctk.CTkToplevel):
+    """Janela "Prazos de retorno": define os atalhos do campo "Retornar em".
+    `ao_salvar(lista_de_dias)`; `interpretar(texto)` valida (levanta ValueError)."""
+
+    def __init__(self, pai, atuais: list, interpretar, ao_salvar, padrao: list,
+                 maximo: int, rotulo) -> None:
+        super().__init__(pai, fg_color=T.CARD)
+        self._interpretar, self._ao_salvar, self._padrao = interpretar, ao_salvar, padrao
+        self._rotulo = rotulo
+        self.title("Prazos de retorno")
+        self.resizable(False, False)
+        centralizar(self, pai, 480, 330)
+        tornar_modal(self, pai)
+
+        ctk.CTkFrame(self, fg_color=T.TEAL, height=6, corner_radius=0).pack(fill="x")
+        corpo = ctk.CTkFrame(self, fg_color="transparent")
+        corpo.pack(fill="both", expand=True, padx=30, pady=(22, 6))
+        ctk.CTkLabel(corpo, text="Prazos de retorno", font=fonte(19, "bold"),
+                     text_color=T.TEXTO, anchor="w").pack(anchor="w")
+        alinhar_esquerda(ctk.CTkLabel(
+            corpo, text=f"Escolha até {maximo} atalhos para o campo \"Retornar em\". Digite os "
+                        "dias separados por vírgula: 1 vira \"Amanhã\"; 3 vira \"3 dias\".",
+            font=fonte(13), text_color=T.TEXTO_SUAVE, anchor="w", wraplength=420,
+        )).pack(anchor="w", pady=(4, 12))
+        self.entrada = ctk.CTkEntry(
+            corpo, height=42, font=fonte(15, "bold"), placeholder_text="1, 3, 7",
+            placeholder_text_color=T.PLACEHOLDER, corner_radius=10, border_width=2,
+            border_color=T.BORDA, fg_color=T.SUPERFICIE, text_color=T.TEXTO)
+        self.entrada.pack(fill="x")
+        self.entrada.insert(0, ", ".join(str(d) for d in atuais))
+        self.lbl_previa = ctk.CTkLabel(corpo, text="", font=fonte(12), text_color=T.TEXTO_SUAVE,
+                                       anchor="w")
+        self.lbl_previa.pack(anchor="w", pady=(8, 0))
+        self.lbl_erro = ctk.CTkLabel(corpo, text="", font=fonte(13, "bold"),
+                                     text_color=T.VERMELHO, anchor="w", wraplength=420)
+        self.lbl_erro.pack(anchor="w", pady=(6, 0))
+        self.entrada.bind("<KeyRelease>", lambda _e: self._previa())
+        self._previa()
+
+        botoes = ctk.CTkFrame(self, fg_color="transparent")
+        botoes.pack(fill="x", padx=30, pady=(6, 22))
+        ctk.CTkButton(
+            botoes, text="Salvar", width=110, height=42, font=fonte(14, "bold"),
+            fg_color=T.TEAL, hover_color=T.TEAL_ESCURO, text_color=T.SOBRE_COR,
+            command=self._salvar).pack(side="right")
+        ctk.CTkButton(
+            botoes, text="Cancelar", width=110, height=42, font=fonte(14, "bold"),
+            fg_color="transparent", text_color=T.TEXTO, border_width=2,
+            border_color=T.BORDA_FORTE, hover_color=T.FUNDO,
+            command=self.destroy).pack(side="right", padx=(0, 10))
+        ctk.CTkButton(
+            botoes, text="Restaurar padrão", width=130, height=42, font=fonte(13, "bold"),
+            fg_color="transparent", text_color=T.TEXTO_SUAVE, hover_color=T.FUNDO,
+            command=self._restaurar).pack(side="left")
+        self.bind("<Return>", lambda _e: self._salvar())
+        self.after(150, lambda: self.entrada.focus_set())
+
+    def _previa(self) -> None:
+        try:
+            dias = self._interpretar(self.entrada.get())
+            self.lbl_previa.configure(text="Botões: " + " · ".join(self._rotulo(d) for d in dias))
+        except ValueError:
+            self.lbl_previa.configure(text="")
+
+    def _restaurar(self) -> None:
+        self.entrada.delete(0, "end")
+        self.entrada.insert(0, ", ".join(str(d) for d in self._padrao))
+        self.lbl_erro.configure(text="")
+        self._previa()
+
+    def _salvar(self) -> None:
+        try:
+            dias = self._interpretar(self.entrada.get())
+        except ValueError as exc:
+            self.lbl_erro.configure(text=str(exc))
+            return
+        self._ao_salvar(dias)
+        self.destroy()
+
+
 class DialogoNovoUsuario(ctk.CTkToplevel):
     """Janela modal para criar uma conta: e-mail, senha (ou gerar) e papel.
 

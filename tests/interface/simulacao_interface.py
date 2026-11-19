@@ -465,6 +465,24 @@ check("já passou" in app.err_retorno.cget("text") and len(app.db.listar()) == l
 app.ent_retorno.text = "99/99/2026"
 app.salvar_registro()
 check(app.err_retorno.cget("text") != "" and len(app.db.listar()) == len(base_ids), "data de retorno inválida é rejeitada")
+# prazos de retorno configuráveis
+_caixa, _ent = app._caixas_retorno[-1]
+check([b.cget("text") for b in _caixa.winfo_children()] == ["Amanhã", "3 dias", "7 dias"], "retorno: atalhos padrão Amanhã, 3 dias, 7 dias")
+app.editar_prazos_retorno()
+from anotacoes.interface import widgets as _wd
+_jd = [w for w in app.winfo_children() if isinstance(w, _wd.DialogoPrazos)][-1]
+check(_jd.entrada.get() == "1, 3, 7" and "Amanhã" in _jd.lbl_previa.cget("text"), "janela de prazos mostra os atuais e a prévia")
+_jd.entrada.delete(0, "end"); _jd.entrada.insert(0, "2, abc"); _jd._salvar()
+check("abc" in _jd.lbl_erro.cget("text") and app.prefs.prazos_retorno == [1, 3, 7], "prazo inválido: mostra erro e não salva")
+_jd.entrada.delete(0, "end"); _jd.entrada.insert(0, "1, 2, 3, 4, 5"); _jd._salvar()
+check("no máximo" in _jd.lbl_erro.cget("text"), "mais prazos do que cabem: erro")
+_jd.entrada.delete(0, "end"); _jd.entrada.insert(0, "14, 1, 30"); _jd._salvar()
+check(app.prefs.prazos_retorno == [1, 14, 30] and _jd.dead, "prazos novos salvos em ordem")
+check([b.cget("text") for b in _caixa.winfo_children() if True][-3:] == ["Amanhã", "14 dias", "30 dias"], "retorno: botões do formulário refeitos na hora")
+_caixa.winfo_children()[1].cget("command")()
+check(_ent.text == (hoje + timedelta(days=14)).strftime("%d/%m/%Y"), "retorno: botão novo (14 dias) preenche a data")
+check(__import__("json").load(open(app.prefs.caminho, encoding="utf-8"))["prazos_retorno"] == [1, 14, 30], "prazos gravados em preferencias.json")
+app.prefs.prazos_retorno = [1, 3, 7]; app._salvar_prazos([1, 3, 7])
 app.ent_retorno.text = "";  app._definir_retorno(app.ent_retorno, 1)
 check(app.ent_retorno.text == amanha.strftime("%d/%m/%Y"), "atalho 'Amanhã' preenche a data")
 app.ent_retorno.text = amanha.strftime("%d/%m/%Y")

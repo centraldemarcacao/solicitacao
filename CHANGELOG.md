@@ -4,6 +4,8 @@ Formato: versão mais recente primeiro. As versões são publicadas em **Release
 (tag `vX.Y.Z`); o programa instalado se atualiza sozinho a partir delas.
 
 ## 2.13.0 — Mais segurança contra perda de dados e publicação mais segura
+* **Prazos de retorno configuráveis**: os atalhos do campo "Retornar em" agora são Amanhã, 3 dias e 7 dias (padrão) e
+  você escolhe os seus (até 4, de 1 a 365 dias) no lápis ao lado de "Limpar", no formulário e na edição.
 * **Janelas sempre centralizadas e livres**: Detalhes, Alertas de pausa, Personalizar e o aviso de pausa abrem no
   centro da janela principal (ou, com ela minimizada, no centro do monitor do mouse) e podem ser arrastados.
 * **Modelos de descrição móveis**: arraste um balão para outra posição e a ordem fica salva. Clicar continua

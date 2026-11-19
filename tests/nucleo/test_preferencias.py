@@ -202,5 +202,32 @@ class TestPausas(unittest.TestCase):
         self.assertEqual(Preferencias(os.path.join(d, "p.json")).nomes_pausa["lanche"], "Café")
 
 
+class TestPrazosRetorno(unittest.TestCase):
+    def test_padrao_e_invalidos(self):
+        from anotacoes.nucleo.prazos import validar_prazos
+        self.assertEqual(validar_prazos(None), [1, 3, 7])
+        self.assertEqual(validar_prazos([]), [1, 3, 7])
+        self.assertEqual(validar_prazos([7, 1, 7, 0, 400, "x", True, 3.5]), [1, 7])
+        self.assertEqual(validar_prazos([5, 4, 3, 2, 1]), [1, 2, 3, 4])      # no máximo 4
+
+    def test_interpretar(self):
+        from anotacoes.nucleo.prazos import interpretar_prazos, rotulo_prazo, prazos_para_texto
+        self.assertEqual(interpretar_prazos("1, 3  7;14"), [1, 3, 7, 14])
+        self.assertEqual(interpretar_prazos("7,1,7"), [1, 7])
+        for ruim in ("", "  ", "a", "0", "366", "-1", "1,2,3,4,5"):
+            with self.assertRaises(ValueError, msg=ruim):
+                interpretar_prazos(ruim)
+        self.assertEqual((rotulo_prazo(1), rotulo_prazo(3)), ("Amanhã", "3 dias"))
+        self.assertEqual(prazos_para_texto([3, 1]), "1, 3")
+
+    def test_preferencias_guardam_prazos(self):
+        d = tempfile.mkdtemp()
+        p = Preferencias(os.path.join(d, "p.json"))
+        self.assertEqual(p.prazos_retorno, [1, 3, 7])
+        p.prazos_retorno = [2, 10]
+        p.salvar()
+        self.assertEqual(Preferencias(os.path.join(d, "p.json")).prazos_retorno, [2, 10])
+
+
 if __name__ == "__main__":
     unittest.main()

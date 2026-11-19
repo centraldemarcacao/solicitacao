@@ -41,6 +41,7 @@ entregue como um único `.exe` que se atualiza sozinho.
 │   │   ├── preferencias.py    #     preferências do usuário e regra do assistente de primeiro uso
 │   │   ├── pausas.py          #     horários dos alertas de pausa
 │   │   ├── modelos.py         #     modelos de descrição
+│   │   ├── prazos.py          #     atalhos de "Retornar em" (Amanhã, 3 dias...)
 │   │   ├── seguranca.py       #     PIN, bloqueio e criptografia dos backups
 │   │   ├── inicializacao.py   #     iniciar com o Windows
 │   │   ├── instancia.py       #     uma janela só (mutex)

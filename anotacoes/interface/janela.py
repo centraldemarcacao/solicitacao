@@ -44,6 +44,7 @@ from anotacoes.interface.widgets import (
     CaixaBusca,
     CartaoNumero,
     DialogoConfirmacao,
+    DialogoPrazos,
     ItemMenu,
     ItemNavegacao,
     MenuPopup,
@@ -71,6 +72,7 @@ from anotacoes.nucleo.database import (
 )
 from anotacoes.nucleo.identidade import Identidade, titulo_completo
 from anotacoes.nucleo.preferencias import Preferencias
+from anotacoes.nucleo.prazos import MAX_PRAZOS, PRAZOS_PADRAO, interpretar_prazos, rotulo_prazo
 from anotacoes.nucleo.util import (
     DIAS,
     MESES,
@@ -855,20 +857,59 @@ class App(ResumoMixin, AtalhosMixin, ExportacaoMixin, AtualizacaoMixin,
             border_color=T.BORDA, fg_color=T.SUPERFICIE, text_color=T.TEXTO,
         )
         entrada.pack(side="left")
-        for texto, dias in (("Amanhã", 1), ("Em 7 dias", 7)):
-            ctk.CTkButton(
-                linha, text=texto, width=80, height=32, corner_radius=8,
-                font=fonte(12, "bold"), fg_color=T.TEAL_CLARO, text_color=T.TEAL_ESCURO,
-                hover_color=T.TEAL_BORDA,
-                command=lambda d=dias, e=entrada: self._definir_retorno(e, d),
-            ).pack(side="left", padx=(8, 0))
+        atalhos = ctk.CTkFrame(linha, fg_color="transparent")
+        atalhos.pack(side="left")
+        self._montar_atalhos_retorno(atalhos, entrada)
+        self._caixas_retorno = [c for c in getattr(self, "_caixas_retorno", []) if self._existe(c[0])]
+        self._caixas_retorno.append((atalhos, entrada))
         ctk.CTkButton(
             linha, text="Limpar", width=64, height=32, corner_radius=8,
             font=fonte(12, "bold"), fg_color="transparent", text_color=T.TEXTO_SUAVE,
             hover_color=T.FUNDO,
             command=lambda e=entrada: self._definir_retorno(e, None),
         ).pack(side="left", padx=(4, 0))
+        ctk.CTkButton(
+            linha, text="", width=32, height=32, corner_radius=8, image=icone("edit", T.TEXTO_SUAVE, 14),
+            fg_color="transparent", hover_color=T.FUNDO, command=self.editar_prazos_retorno,
+        ).pack(side="left", padx=(2, 0))
         return linha, entrada
+
+    @staticmethod
+    def _existe(widget) -> bool:
+        try:
+            return bool(widget.winfo_exists())
+        except Exception:
+            return False
+
+    def _montar_atalhos_retorno(self, caixa, entrada) -> None:
+        """Botões 'Amanhã', '3 dias'... conforme os prazos configurados."""
+        for filho in caixa.winfo_children():
+            filho.destroy()
+        for dias in self.prefs.prazos_retorno:
+            texto = rotulo_prazo(dias)
+            ctk.CTkButton(
+                caixa, text=texto, width=max(64, 9 * len(texto) + 16), height=32, corner_radius=8,
+                font=fonte(12, "bold"), fg_color=T.TEAL_CLARO, text_color=T.TEAL_ESCURO,
+                hover_color=T.TEAL_BORDA,
+                command=lambda d=dias, e=entrada: self._definir_retorno(e, d),
+            ).pack(side="left", padx=(8, 0))
+
+    def editar_prazos_retorno(self) -> None:
+        """Janela para mudar os atalhos de retorno (ex.: Amanhã, 3 dias, 7 dias)."""
+        DialogoPrazos(self, self.prefs.prazos_retorno, interpretar_prazos, self._salvar_prazos,
+                      list(PRAZOS_PADRAO), MAX_PRAZOS, rotulo_prazo)
+
+    def _salvar_prazos(self, dias: list) -> None:
+        self.prefs.prazos_retorno = dias
+        if not self.prefs.salvar():
+            self.toast.mostrar("Não foi possível gravar os prazos (pasta sem permissão?).",
+                               "erro", 6000)
+        self._caixas_retorno = [c for c in self._caixas_retorno if self._existe(c[0])]
+        for caixa, entrada in self._caixas_retorno:
+            self._montar_atalhos_retorno(caixa, entrada)
+        self.toast.mostrar("Prazos de retorno salvos: "
+                           + ", ".join(rotulo_prazo(d) for d in self.prefs.prazos_retorno) + ".",
+                           "sucesso", 3500)
 
     @staticmethod
     def _definir_retorno(entrada, dias) -> None:

@@ -146,3 +146,4 @@ MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
 def saudacao(hora: int) -> str:
     """Bom dia / Boa tarde / Boa noite conforme a hora."""
     return "Bom dia" if hora < 12 else "Boa tarde" if hora < 18 else "Boa noite"
+

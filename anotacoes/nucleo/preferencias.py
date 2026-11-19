@@ -12,6 +12,7 @@ import os
 
 from anotacoes.nucleo.modelos import validar_modelos
 from anotacoes.nucleo.pausas import horarios_validos, nomes_validos
+from anotacoes.nucleo.prazos import validar_prazos
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ CHAVE_ALERTAS_PAUSA = "alertas_pausa"
 CHAVE_HORARIOS_PAUSA = "horarios_pausa"
 CHAVE_NOMES_PAUSA = "nomes_pausa"
 CHAVE_MODELOS = "modelos_descricao"
+CHAVE_PRAZOS_RETORNO = "prazos_retorno"
 CHAVE_PRIMEIRO_USO = "primeiro_uso_concluido"
 
 
@@ -78,6 +80,15 @@ class Preferencias:
     @nomes_pausa.setter
     def nomes_pausa(self, nomes: dict) -> None:
         self.dados[CHAVE_NOMES_PAUSA] = nomes_validos(nomes)
+
+    @property
+    def prazos_retorno(self) -> list:
+        """Dias dos atalhos de "Retornar em" (padrão: [1, 3, 7] = Amanhã, 3 dias, 7 dias)."""
+        return validar_prazos(self.dados.get(CHAVE_PRAZOS_RETORNO))
+
+    @prazos_retorno.setter
+    def prazos_retorno(self, prazos) -> None:
+        self.dados[CHAVE_PRAZOS_RETORNO] = validar_prazos(prazos)
 
     @property
     def modelos_descricao(self) -> list:
